@@ -61,6 +61,12 @@ export type ConversationSession = {
   updatedAt: string;
 };
 
+export type ScenarioPreset = {
+  id: string;
+  label: string;
+  value: string;
+};
+
 export type CoachContextOption = {
   value: CoachContextMode;
   label: string;
@@ -87,3 +93,36 @@ export const DEFAULT_SETTINGS: CoachSettings = {
   explanationLanguage: "zh",
   recentTurns: 4,
 };
+
+export const DEFAULT_SCENARIO_PRESETS: ScenarioPreset[] = [
+  {
+    id: "coffee-chat",
+    label: "Coffee chat",
+    value:
+      "You are chatting casually with a friendly colleague at a coffee shop before work.",
+  },
+  {
+    id: "job-interview",
+    label: "Job interview",
+    value:
+      "You are in a job interview. The Chat Partner is the interviewer asking realistic follow-up questions.",
+  },
+  {
+    id: "travel-help",
+    label: "Travel help",
+    value:
+      "You are traveling abroad and asking for help with directions, transport, food, or local recommendations.",
+  },
+  {
+    id: "work-update",
+    label: "Work update",
+    value:
+      "You are giving a short work update in a meeting and answering follow-up questions from a teammate.",
+  },
+  {
+    id: "daily-life",
+    label: "Daily life",
+    value:
+      "You are talking about ordinary daily life, habits, plans, feelings, and small personal stories.",
+  },
+];

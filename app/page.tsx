@@ -16,6 +16,7 @@ import {
   SILENT_COACH_SYSTEM_PROMPT,
 } from "@/lib/prompts";
 import {
+  DEFAULT_SCENARIO_PRESETS,
   DEFAULT_SETTINGS,
   type ChatMessage,
   type CoachContextMode,
@@ -24,6 +25,7 @@ import {
   type CoachSettings,
   type ConversationSession,
   type OpenRouterModel,
+  type ScenarioPreset,
 } from "@/lib/types";
 
 const LEGACY_MESSAGE_STORAGE_KEY = "english-shadow-coach.messages";
@@ -31,6 +33,7 @@ const LEGACY_FEEDBACK_STORAGE_KEY = "english-shadow-coach.feedback";
 const SESSIONS_STORAGE_KEY = "english-shadow-coach.sessions";
 const CURRENT_SESSION_STORAGE_KEY = "english-shadow-coach.current-session-id";
 const SETTINGS_STORAGE_KEY = "english-shadow-coach.settings";
+const SCENARIO_PRESETS_STORAGE_KEY = "english-shadow-coach.scenario-presets";
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_FEEDBACK: CoachFeedback[] = [];
 
@@ -127,6 +130,25 @@ function mergeSettings(settings: Partial<CoachSettings>): CoachSettings {
   };
 }
 
+function isScenarioPresetLike(preset: unknown): preset is Partial<ScenarioPreset> {
+  return Boolean(preset && typeof preset === "object");
+}
+
+function normalizeScenarioPresets(presets: unknown): ScenarioPreset[] {
+  if (!Array.isArray(presets)) {
+    return DEFAULT_SCENARIO_PRESETS;
+  }
+
+  return presets
+    .filter(isScenarioPresetLike)
+    .map((preset, index) => ({
+      id: preset.id || `preset-${index}`,
+      label: preset.label?.trim() ?? "",
+      value: preset.value?.trim() ?? "",
+    }))
+    .filter((preset) => preset.label && preset.value);
+}
+
 function isChatMessage(
   message: ChatMessage | undefined,
 ): message is ChatMessage {
@@ -215,7 +237,14 @@ export default function Home() {
     SETTINGS_STORAGE_KEY,
     DEFAULT_SETTINGS,
   );
+  const [scenarioPresets, setScenarioPresets] = useLocalStorageState<
+    ScenarioPreset[]
+  >(SCENARIO_PRESETS_STORAGE_KEY, DEFAULT_SCENARIO_PRESETS);
   const effectiveSettings = useMemo(() => mergeSettings(settings), [settings]);
+  const effectiveScenarioPresets = useMemo(
+    () => normalizeScenarioPresets(scenarioPresets),
+    [scenarioPresets],
+  );
   const [draft, setDraft] = useLocalStorageState(
     "english-shadow-coach.draft",
     "",
@@ -709,10 +738,12 @@ ${contextText}
         <ChatPanel
           messages={messages}
           scenario={scenario}
+          scenarioPresets={effectiveScenarioPresets}
           value={draft}
           error={chatError}
           isPending={chatPending}
           onScenarioChange={handleScenarioChange}
+          onScenarioPresetsChange={setScenarioPresets}
           onValueChange={setDraft}
           onSubmit={handleSend}
         />

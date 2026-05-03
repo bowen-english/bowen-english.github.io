@@ -2,16 +2,18 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Send, Sparkles, UserRound } from "lucide-react";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, ScenarioPreset } from "@/lib/types";
 import { ScenarioControl } from "@/components/scenario-control";
 
 type ChatPanelProps = {
   messages: ChatMessage[];
   scenario: string;
+  scenarioPresets: ScenarioPreset[];
   value: string;
   error: string | null;
   isPending: boolean;
   onScenarioChange: (scenario: string) => void;
+  onScenarioPresetsChange: (presets: ScenarioPreset[]) => void;
   onValueChange: (value: string) => void;
   onSubmit: () => void;
 };
@@ -19,10 +21,12 @@ type ChatPanelProps = {
 export function ChatPanel({
   messages,
   scenario,
+  scenarioPresets,
   value,
   error,
   isPending,
   onScenarioChange,
+  onScenarioPresetsChange,
   onValueChange,
   onSubmit,
 }: ChatPanelProps) {
@@ -61,7 +65,12 @@ export function ChatPanel({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <ScenarioControl scenario={scenario} onChange={onScenarioChange} />
+          <ScenarioControl
+            scenario={scenario}
+            presets={scenarioPresets}
+            onChange={onScenarioChange}
+            onPresetsChange={onScenarioPresetsChange}
+          />
           {isPending ? (
             <div className="inline-flex items-center gap-2 rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-xs font-semibold text-teal-700">
               <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
