@@ -44,7 +44,7 @@ NEXT_PUBLIC_BASE_PATH=/your-repo-name npm run build
 
 Do not commit API keys. The deployed app asks for the key in the browser and stores it locally on each device/browser.
 
-This repository includes a GitHub Pages workflow at `.github/workflows/pages.yml`. For the special `bowen-english.github.io` repository, no base path is needed; pushing to `main` builds and deploys the static site automatically.
+This repository includes a GitHub Pages workflow at `.github/workflows/nextjs.yml`. For the special `bowen-english.github.io` repository, no base path is needed; pushing to `main` builds and deploys the static site automatically.
 
 `./run` is a small local launcher. It starts the Next.js dev server and creates `.env.local` from `.env.example` if the runtime env file is missing.
 
