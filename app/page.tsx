@@ -66,6 +66,7 @@ function createSession({
     id,
     title: getSessionTitle(messages),
     titleEdited: false,
+    scenario: "",
     messages,
     feedback,
     createdAt: now,
@@ -75,7 +76,7 @@ function createSession({
 
 function applySessionPatch(
   session: ConversationSession,
-  patch: Partial<Pick<ConversationSession, "messages" | "feedback">>,
+  patch: Partial<Pick<ConversationSession, "messages" | "feedback" | "scenario">>,
 ) {
   const messages = patch.messages ?? session.messages;
 
@@ -85,6 +86,21 @@ function applySessionPatch(
     title: session.titleEdited ? session.title : getSessionTitle(messages),
     updatedAt: new Date().toISOString(),
   };
+}
+
+function buildChatSystemPrompt(scenario: string) {
+  const trimmedScenario = scenario.trim();
+
+  if (!trimmedScenario) {
+    return CHAT_PARTNER_SYSTEM_PROMPT;
+  }
+
+  return `${CHAT_PARTNER_SYSTEM_PROMPT}
+
+Scenario:
+${trimmedScenario}
+
+Stay inside this scenario naturally. If the user's message does not fit the scenario perfectly, adapt gracefully and keep the conversation moving.`;
 }
 
 function readStoredArray<T>(key: string): T[] {
@@ -223,6 +239,7 @@ export default function Home() {
   const activeSessionId = activeSession?.id ?? null;
   const messages = activeSession?.messages ?? EMPTY_MESSAGES;
   const feedback = activeSession?.feedback ?? EMPTY_FEEDBACK;
+  const scenario = activeSession?.scenario ?? "";
 
   const loadPublicModels = useCallback(async () => {
     setModelsLoading(true);
@@ -339,7 +356,9 @@ export default function Home() {
   const updateSession = useCallback(
     (
       sessionId: string,
-      patch: Partial<Pick<ConversationSession, "messages" | "feedback">>,
+      patch: Partial<
+        Pick<ConversationSession, "messages" | "feedback" | "scenario">
+      >,
     ) => {
       setSessions((current) =>
         current.map((session) =>
@@ -351,7 +370,11 @@ export default function Home() {
   );
 
   const runChatPartner = useCallback(
-    async (sessionId: string, conversation: ChatMessage[]) => {
+    async (
+      sessionId: string,
+      conversation: ChatMessage[],
+      conversationScenario: string,
+    ) => {
       setChatPending(true);
       setChatError(null);
 
@@ -361,7 +384,10 @@ export default function Home() {
           model: effectiveSettings.chatModel,
           temperature: 0.75,
           messages: [
-            { role: "system", content: CHAT_PARTNER_SYSTEM_PROMPT },
+            {
+              role: "system",
+              content: buildChatSystemPrompt(conversationScenario),
+            },
             ...conversation
               .slice(-24)
               .map(({ role, content }) => ({ role, content })),
@@ -403,6 +429,7 @@ export default function Home() {
       sessionId: string,
       conversation: ChatMessage[],
       latestUserMessage: ChatMessage,
+      conversationScenario: string,
     ) => {
       setCoachPending(true);
       setCoachError(null);
@@ -429,6 +456,9 @@ export default function Home() {
             {
               role: "user",
               content: `
+Scenario:
+${conversationScenario.trim() || "None"}
+
 Context mode: ${effectiveSettings.contextMode}
 Explanation language: ${getExplanationLanguageName(effectiveSettings.explanationLanguage)}
 Write explanation, issues, and reusable pattern in the requested explanation language.
@@ -514,8 +544,8 @@ ${contextText}
       setCurrentSessionId(sessionId);
     }
 
-    void runChatPartner(sessionId, conversation);
-    void runSilentCoach(sessionId, conversation, userMessage);
+    void runChatPartner(sessionId, conversation, scenario);
+    void runSilentCoach(sessionId, conversation, userMessage, scenario);
   }, [
     activeSessionId,
     chatPending,
@@ -524,6 +554,7 @@ ${contextText}
     messages,
     runChatPartner,
     runSilentCoach,
+    scenario,
     setCurrentSessionId,
     setDraft,
     setSessions,
@@ -597,6 +628,23 @@ ${contextText}
     [setSessions],
   );
 
+  const handleScenarioChange = useCallback(
+    (nextScenario: string) => {
+      const scenarioText = nextScenario.trim();
+
+      if (activeSessionId) {
+        updateSession(activeSessionId, { scenario: scenarioText });
+        return;
+      }
+
+      const session = createSession();
+      session.scenario = scenarioText;
+      setSessions((current) => [session, ...current]);
+      setCurrentSessionId(session.id);
+    },
+    [activeSessionId, setCurrentSessionId, setSessions, updateSession],
+  );
+
   const hasApiKey = Boolean(effectiveSettings.openRouterApiKey.trim());
 
   return (
@@ -660,9 +708,11 @@ ${contextText}
         />
         <ChatPanel
           messages={messages}
+          scenario={scenario}
           value={draft}
           error={chatError}
           isPending={chatPending}
+          onScenarioChange={handleScenarioChange}
           onValueChange={setDraft}
           onSubmit={handleSend}
         />

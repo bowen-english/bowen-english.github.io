@@ -54,6 +54,7 @@ export type ConversationSession = {
   id: string;
   title: string;
   titleEdited?: boolean;
+  scenario?: string;
   messages: ChatMessage[];
   feedback: CoachFeedback[];
   createdAt: string;

@@ -1,27 +1,33 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useRef } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Send, Sparkles, UserRound } from "lucide-react";
 import type { ChatMessage } from "@/lib/types";
+import { ScenarioControl } from "@/components/scenario-control";
 
 type ChatPanelProps = {
   messages: ChatMessage[];
+  scenario: string;
   value: string;
   error: string | null;
   isPending: boolean;
+  onScenarioChange: (scenario: string) => void;
   onValueChange: (value: string) => void;
   onSubmit: () => void;
 };
 
 export function ChatPanel({
   messages,
+  scenario,
   value,
   error,
   isPending,
+  onScenarioChange,
   onValueChange,
   onSubmit,
 }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const [isComposing, setIsComposing] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -33,6 +39,10 @@ export function ChatPanel({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isComposing || event.nativeEvent.isComposing) {
+      return;
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       onSubmit();
@@ -46,14 +56,19 @@ export function ChatPanel({
           <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-zinc-950">
             Chat Partner
           </h2>
-          <p className="mt-1 text-sm text-zinc-500">Natural English conversation</p>
+          <p className="mt-1 line-clamp-1 text-sm text-zinc-500">
+            {scenario.trim() || "Natural English conversation"}
+          </p>
         </div>
-        {isPending ? (
-          <div className="inline-flex items-center gap-2 rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-xs font-semibold text-teal-700">
-            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-            thinking
-          </div>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          <ScenarioControl scenario={scenario} onChange={onScenarioChange} />
+          {isPending ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-xs font-semibold text-teal-700">
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              thinking
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
@@ -135,6 +150,8 @@ export function ChatPanel({
             value={value}
             rows={1}
             onChange={(event) => onValueChange(event.target.value)}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={() => setIsComposing(false)}
             onKeyDown={handleKeyDown}
             placeholder="Type in English..."
           />
