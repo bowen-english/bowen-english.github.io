@@ -1,0 +1,607 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bot } from "lucide-react";
+import { ChatPanel } from "@/components/chat-panel";
+import { CoachPanel } from "@/components/coach-panel";
+import { HistoryPanel } from "@/components/history-panel";
+import { SettingsPanel } from "@/components/settings-panel";
+import { useLocalStorageState } from "@/hooks/use-local-storage-state";
+import {
+  callOpenRouterFromBrowser,
+  fetchOpenRouterModelsFromBrowser,
+} from "@/lib/openrouter-browser";
+import {
+  CHAT_PARTNER_SYSTEM_PROMPT,
+  SILENT_COACH_SYSTEM_PROMPT,
+} from "@/lib/prompts";
+import {
+  DEFAULT_SETTINGS,
+  type ChatMessage,
+  type CoachContextMode,
+  type CoachExplanationLanguage,
+  type CoachFeedback,
+  type CoachSettings,
+  type ConversationSession,
+  type OpenRouterModel,
+} from "@/lib/types";
+
+const LEGACY_MESSAGE_STORAGE_KEY = "english-shadow-coach.messages";
+const LEGACY_FEEDBACK_STORAGE_KEY = "english-shadow-coach.feedback";
+const SESSIONS_STORAGE_KEY = "english-shadow-coach.sessions";
+const CURRENT_SESSION_STORAGE_KEY = "english-shadow-coach.current-session-id";
+const SETTINGS_STORAGE_KEY = "english-shadow-coach.settings";
+const EMPTY_MESSAGES: ChatMessage[] = [];
+const EMPTY_FEEDBACK: CoachFeedback[] = [];
+
+type CoachResponse = Omit<CoachFeedback, "id" | "createdAt">;
+
+function makeId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+}
+
+function getSessionTitle(messages: ChatMessage[]) {
+  const firstUserMessage = messages.find((message) => message.role === "user");
+  const title = firstUserMessage?.content.replace(/\s+/g, " ").trim();
+
+  if (!title) {
+    return "New conversation";
+  }
+
+  return title.length > 56 ? `${title.slice(0, 56)}...` : title;
+}
+
+function createSession({
+  id = makeId(),
+  messages = [],
+  feedback = [],
+}: {
+  id?: string;
+  messages?: ChatMessage[];
+  feedback?: CoachFeedback[];
+} = {}): ConversationSession {
+  const now = new Date().toISOString();
+
+  return {
+    id,
+    title: getSessionTitle(messages),
+    messages,
+    feedback,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function applySessionPatch(
+  session: ConversationSession,
+  patch: Partial<Pick<ConversationSession, "messages" | "feedback">>,
+) {
+  const messages = patch.messages ?? session.messages;
+
+  return {
+    ...session,
+    ...patch,
+    title: getSessionTitle(messages),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function readStoredArray<T>(key: string): T[] {
+  try {
+    const value = window.localStorage.getItem(key);
+    const parsed = value ? JSON.parse(value) : [];
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function mergeSettings(settings: Partial<CoachSettings>): CoachSettings {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...settings,
+    openRouterApiKey: settings.openRouterApiKey ?? "",
+    chatModel: settings.chatModel || DEFAULT_SETTINGS.chatModel,
+    coachModel: settings.coachModel || DEFAULT_SETTINGS.coachModel,
+    contextMode: settings.contextMode || DEFAULT_SETTINGS.contextMode,
+    explanationLanguage:
+      settings.explanationLanguage || DEFAULT_SETTINGS.explanationLanguage,
+    recentTurns: settings.recentTurns || DEFAULT_SETTINGS.recentTurns,
+  };
+}
+
+function isChatMessage(
+  message: ChatMessage | undefined,
+): message is ChatMessage {
+  return Boolean(message);
+}
+
+function pickCoachContext({
+  messages,
+  mode,
+  recentTurns,
+}: {
+  messages: ChatMessage[];
+  mode: CoachContextMode;
+  recentTurns: number;
+}) {
+  if (mode === "latest_user") {
+    return [messages[messages.length - 1]].filter(isChatMessage);
+  }
+
+  if (mode === "latest_user_with_partner") {
+    const latestUser = messages[messages.length - 1];
+    const previousAssistant = [...messages]
+      .slice(0, -1)
+      .reverse()
+      .find((message) => message.role === "assistant");
+
+    return [previousAssistant, latestUser].filter(isChatMessage);
+  }
+
+  const userIndexes = messages.reduce<number[]>((indexes, message, index) => {
+    if (message.role === "user") {
+      indexes.push(index);
+    }
+    return indexes;
+  }, []);
+  const startIndex = userIndexes[Math.max(0, userIndexes.length - recentTurns)];
+
+  return messages.slice(startIndex ?? 0);
+}
+
+function extractJsonObject(text: string) {
+  const trimmed = text.trim();
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return trimmed;
+  }
+
+  return trimmed.slice(firstBrace, lastBrace + 1);
+}
+
+function getExplanationLanguageName(language: CoachExplanationLanguage) {
+  return language === "zh" ? "Chinese (Simplified)" : "English";
+}
+
+function normalizeCoachResponse(raw: string, messageId: string): CoachResponse {
+  const parsed = JSON.parse(extractJsonObject(raw)) as Partial<CoachResponse>;
+  const severity =
+    parsed.severity === "none" ||
+    parsed.severity === "minor" ||
+    parsed.severity === "major"
+      ? parsed.severity
+      : "minor";
+  const explanation = parsed.explanation ?? parsed.explanationZh ?? "";
+
+  return {
+    messageId,
+    original: parsed.original ?? "",
+    corrected: parsed.corrected ?? "",
+    natural: parsed.natural ?? "",
+    issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+    explanation,
+    pattern: parsed.pattern ?? "",
+    severity,
+  };
+}
+
+export default function Home() {
+  const [sessions, setSessions, sessionsHydrated] = useLocalStorageState<
+    ConversationSession[]
+  >(SESSIONS_STORAGE_KEY, []);
+  const [currentSessionId, setCurrentSessionId, currentSessionHydrated] =
+    useLocalStorageState<string | null>(CURRENT_SESSION_STORAGE_KEY, null);
+  const [settings, setSettings] = useLocalStorageState<CoachSettings>(
+    SETTINGS_STORAGE_KEY,
+    DEFAULT_SETTINGS,
+  );
+  const effectiveSettings = useMemo(() => mergeSettings(settings), [settings]);
+  const [draft, setDraft] = useLocalStorageState(
+    "english-shadow-coach.draft",
+    "",
+  );
+  const [chatPending, setChatPending] = useState(false);
+  const [coachPending, setCoachPending] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [coachError, setCoachError] = useState<string | null>(null);
+  const [models, setModels] = useState<OpenRouterModel[]>([]);
+  const [modelsSource, setModelsSource] = useState<"user" | "public" | null>(
+    null,
+  );
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
+  const activeSession =
+    sessions.find((session) => session.id === currentSessionId) ??
+    sessions[0] ??
+    null;
+  const activeSessionId = activeSession?.id ?? null;
+  const messages = activeSession?.messages ?? EMPTY_MESSAGES;
+  const feedback = activeSession?.feedback ?? EMPTY_FEEDBACK;
+
+  const loadModels = useCallback(async () => {
+    setModelsLoading(true);
+    setModelsError(null);
+
+    try {
+      const result = await fetchOpenRouterModelsFromBrowser(
+        effectiveSettings.openRouterApiKey,
+      );
+
+      setModels(result.models);
+      setModelsSource(result.source);
+      setModelsError("warning" in result ? result.warning ?? null : null);
+    } catch (error) {
+      setModelsError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load OpenRouter models.",
+      );
+    } finally {
+      setModelsLoading(false);
+    }
+  }, [effectiveSettings.openRouterApiKey]);
+
+  useEffect(() => {
+    if (!sessionsHydrated || !currentSessionHydrated) {
+      return;
+    }
+
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+
+      if (sessions.length === 0) {
+        const legacyMessages = readStoredArray<ChatMessage>(
+          LEGACY_MESSAGE_STORAGE_KEY,
+        );
+        const legacyFeedback = readStoredArray<CoachFeedback>(
+          LEGACY_FEEDBACK_STORAGE_KEY,
+        );
+
+        if (legacyMessages.length > 0 || legacyFeedback.length > 0) {
+          const migratedSession = createSession({
+            messages: legacyMessages,
+            feedback: legacyFeedback,
+          });
+
+          setSessions([migratedSession]);
+          setCurrentSessionId(migratedSession.id);
+          window.localStorage.removeItem(LEGACY_MESSAGE_STORAGE_KEY);
+          window.localStorage.removeItem(LEGACY_FEEDBACK_STORAGE_KEY);
+        }
+
+        return;
+      }
+
+      if (
+        !currentSessionId ||
+        !sessions.some((session) => session.id === currentSessionId)
+      ) {
+        setCurrentSessionId(sessions[0]?.id ?? null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentSessionHydrated,
+    currentSessionId,
+    sessions,
+    sessionsHydrated,
+    setCurrentSessionId,
+    setSessions,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadModels();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadModels]);
+
+  const updateSession = useCallback(
+    (
+      sessionId: string,
+      patch: Partial<Pick<ConversationSession, "messages" | "feedback">>,
+    ) => {
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId ? applySessionPatch(session, patch) : session,
+        ),
+      );
+    },
+    [setSessions],
+  );
+
+  const runChatPartner = useCallback(
+    async (sessionId: string, conversation: ChatMessage[]) => {
+      setChatPending(true);
+      setChatError(null);
+
+      try {
+        const content = await callOpenRouterFromBrowser({
+          apiKey: effectiveSettings.openRouterApiKey,
+          model: effectiveSettings.chatModel,
+          temperature: 0.75,
+          messages: [
+            { role: "system", content: CHAT_PARTNER_SYSTEM_PROMPT },
+            ...conversation
+              .slice(-24)
+              .map(({ role, content }) => ({ role, content })),
+          ],
+        });
+        const assistantMessage: ChatMessage = {
+          id: makeId(),
+          role: "assistant",
+          content,
+          createdAt: new Date().toISOString(),
+        };
+
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? applySessionPatch(session, {
+                  messages: [...session.messages, assistantMessage],
+                })
+              : session,
+          ),
+        );
+      } catch (error) {
+        setChatError(
+          error instanceof Error ? error.message : "Chat Partner request failed.",
+        );
+      } finally {
+        setChatPending(false);
+      }
+    },
+    [
+      effectiveSettings.chatModel,
+      effectiveSettings.openRouterApiKey,
+      setSessions,
+    ],
+  );
+
+  const runSilentCoach = useCallback(
+    async (
+      sessionId: string,
+      conversation: ChatMessage[],
+      latestUserMessage: ChatMessage,
+    ) => {
+      setCoachPending(true);
+      setCoachError(null);
+
+      try {
+        const context = pickCoachContext({
+          messages: conversation,
+          mode: effectiveSettings.contextMode,
+          recentTurns: effectiveSettings.recentTurns,
+        });
+        const contextText = context
+          .map((message) => {
+            const speaker = message.role === "user" ? "User" : "Chat Partner";
+            return `${speaker}: ${message.content}`;
+          })
+          .join("\n\n");
+        const raw = await callOpenRouterFromBrowser({
+          apiKey: effectiveSettings.openRouterApiKey,
+          model: effectiveSettings.coachModel,
+          temperature: 0.2,
+          responseFormat: { type: "json_object" },
+          messages: [
+            { role: "system", content: SILENT_COACH_SYSTEM_PROMPT },
+            {
+              role: "user",
+              content: `
+Context mode: ${effectiveSettings.contextMode}
+Explanation language: ${getExplanationLanguageName(effectiveSettings.explanationLanguage)}
+Write explanation, issues, and reusable pattern in the requested explanation language.
+Analyze only this latest user sentence:
+${latestUserMessage.content}
+
+Conversation context:
+${contextText}
+`.trim(),
+            },
+          ],
+        });
+        const result = normalizeCoachResponse(raw, latestUserMessage.id);
+        const coachFeedback: CoachFeedback = {
+          ...result,
+          id: makeId(),
+          createdAt: new Date().toISOString(),
+        };
+
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId
+              ? applySessionPatch(session, {
+                  feedback: [coachFeedback, ...session.feedback].slice(0, 80),
+                })
+              : session,
+          ),
+        );
+      } catch (error) {
+        setCoachError(
+          error instanceof Error ? error.message : "Silent Coach request failed.",
+        );
+      } finally {
+        setCoachPending(false);
+      }
+    },
+    [
+      effectiveSettings.coachModel,
+      effectiveSettings.contextMode,
+      effectiveSettings.explanationLanguage,
+      effectiveSettings.openRouterApiKey,
+      effectiveSettings.recentTurns,
+      setSessions,
+    ],
+  );
+
+  const handleSend = useCallback(() => {
+    const content = draft.trim();
+
+    if (!content || chatPending) {
+      return;
+    }
+
+    const userMessage: ChatMessage = {
+      id: makeId(),
+      role: "user",
+      content,
+      createdAt: new Date().toISOString(),
+    };
+    const sessionId = activeSessionId ?? makeId();
+    const conversation = [...messages, userMessage];
+
+    setDraft("");
+    setChatError(null);
+    setCoachError(null);
+
+    if (activeSessionId) {
+      updateSession(sessionId, { messages: conversation });
+    } else {
+      setSessions((current) => [
+        createSession({ id: sessionId, messages: conversation }),
+        ...current,
+      ]);
+      setCurrentSessionId(sessionId);
+    }
+
+    void runChatPartner(sessionId, conversation);
+    void runSilentCoach(sessionId, conversation, userMessage);
+  }, [
+    activeSessionId,
+    chatPending,
+    draft,
+    messages,
+    runChatPartner,
+    runSilentCoach,
+    setCurrentSessionId,
+    setDraft,
+    setSessions,
+    updateSession,
+  ]);
+
+  const handleNewSession = useCallback(() => {
+    if (
+      activeSession &&
+      activeSession.messages.length === 0 &&
+      activeSession.feedback.length === 0
+    ) {
+      setCurrentSessionId(activeSession.id);
+      setDraft("");
+      setChatError(null);
+      setCoachError(null);
+      return;
+    }
+
+    const session = createSession();
+
+    setSessions((current) => [session, ...current]);
+    setCurrentSessionId(session.id);
+    setDraft("");
+    setChatError(null);
+    setCoachError(null);
+  }, [
+    activeSession,
+    setCurrentSessionId,
+    setDraft,
+    setSessions,
+  ]);
+
+  const handleDeleteSession = useCallback(
+    (sessionId: string) => {
+      const nextSessions = sessions.filter((session) => session.id !== sessionId);
+
+      setSessions(nextSessions);
+
+      if (sessionId === activeSessionId) {
+        setCurrentSessionId(nextSessions[0]?.id ?? null);
+        setDraft("");
+        setChatError(null);
+        setCoachError(null);
+      }
+    },
+    [
+      activeSessionId,
+      sessions,
+      setCurrentSessionId,
+      setDraft,
+      setSessions,
+    ],
+  );
+
+  return (
+    <main className="flex h-dvh min-h-[720px] flex-col overflow-hidden text-zinc-950">
+      <header className="bg-white/65 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white shadow-lg shadow-zinc-900/10">
+              <Bot className="size-5" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-bold tracking-normal text-zinc-950">
+                English Shadow Coach
+              </h1>
+              <p className="truncate text-sm text-zinc-500">
+                Chat naturally. Improve quietly.
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <SettingsPanel
+        settings={effectiveSettings}
+        models={models}
+        modelsLoading={modelsLoading}
+        modelsError={modelsError}
+        modelsSource={modelsSource}
+        recordCount={messages.length}
+        feedbackCount={feedback.length}
+        onChange={setSettings}
+        onRefreshModels={loadModels}
+        onNewSession={handleNewSession}
+      />
+
+      <HistoryPanel
+        sessions={sessions}
+        currentSessionId={activeSessionId}
+        onSelectSession={setCurrentSessionId}
+        onDeleteSession={handleDeleteSession}
+      />
+
+      <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 overflow-hidden border-x border-black/10 bg-white/20 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+        <ChatPanel
+          messages={messages}
+          value={draft}
+          error={chatError}
+          isPending={chatPending}
+          onValueChange={setDraft}
+          onSubmit={handleSend}
+        />
+        <CoachPanel
+          feedback={feedback}
+          error={coachError}
+          isPending={coachPending}
+        />
+      </div>
+    </main>
+  );
+}

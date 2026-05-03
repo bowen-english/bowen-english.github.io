@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  echo "Usage: ./run"
+  echo "Starts the English Shadow Coach Next.js dev server."
+  exit 0
+fi
+
+npm run dev
