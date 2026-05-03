@@ -53,6 +53,7 @@ export type CoachFeedback = {
 export type ConversationSession = {
   id: string;
   title: string;
+  titleEdited?: boolean;
   messages: ChatMessage[];
   feedback: CoachFeedback[];
   createdAt: string;

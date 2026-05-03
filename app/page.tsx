@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot } from "lucide-react";
+import { Bot, KeyRound, Plus, Settings } from "lucide-react";
 import { ChatPanel } from "@/components/chat-panel";
 import { CoachPanel } from "@/components/coach-panel";
 import { HistoryPanel } from "@/components/history-panel";
@@ -65,6 +65,7 @@ function createSession({
   return {
     id,
     title: getSessionTitle(messages),
+    titleEdited: false,
     messages,
     feedback,
     createdAt: now,
@@ -81,7 +82,7 @@ function applySessionPatch(
   return {
     ...session,
     ...patch,
-    title: getSessionTitle(messages),
+    title: session.titleEdited ? session.title : getSessionTitle(messages),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -213,6 +214,7 @@ export default function Home() {
   );
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const activeSession =
     sessions.find((session) => session.id === currentSessionId) ??
@@ -222,7 +224,27 @@ export default function Home() {
   const messages = activeSession?.messages ?? EMPTY_MESSAGES;
   const feedback = activeSession?.feedback ?? EMPTY_FEEDBACK;
 
-  const loadModels = useCallback(async () => {
+  const loadPublicModels = useCallback(async () => {
+    setModelsLoading(true);
+    setModelsError(null);
+
+    try {
+      const result = await fetchOpenRouterModelsFromBrowser("");
+
+      setModels(result.models);
+      setModelsSource(result.source);
+    } catch (error) {
+      setModelsError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load OpenRouter models.",
+      );
+    } finally {
+      setModelsLoading(false);
+    }
+  }, []);
+
+  const refreshModels = useCallback(async () => {
     setModelsLoading(true);
     setModelsError(null);
 
@@ -305,14 +327,14 @@ export default function Home() {
 
     queueMicrotask(() => {
       if (!cancelled) {
-        void loadModels();
+        void loadPublicModels();
       }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [loadModels]);
+  }, [loadPublicModels]);
 
   const updateSession = useCallback(
     (
@@ -460,6 +482,15 @@ ${contextText}
       return;
     }
 
+    if (!effectiveSettings.openRouterApiKey.trim()) {
+      const message = "Add your OpenRouter API key in Settings before sending.";
+
+      setChatError(message);
+      setCoachError(message);
+      setSettingsOpen(true);
+      return;
+    }
+
     const userMessage: ChatMessage = {
       id: makeId(),
       role: "user",
@@ -489,6 +520,7 @@ ${contextText}
     activeSessionId,
     chatPending,
     draft,
+    effectiveSettings.openRouterApiKey,
     messages,
     runChatPartner,
     runSilentCoach,
@@ -547,10 +579,30 @@ ${contextText}
     ],
   );
 
+  const handleRenameSession = useCallback(
+    (sessionId: string, title: string) => {
+      setSessions((current) =>
+        current.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                title,
+                titleEdited: true,
+                updatedAt: new Date().toISOString(),
+              }
+            : session,
+        ),
+      );
+    },
+    [setSessions],
+  );
+
+  const hasApiKey = Boolean(effectiveSettings.openRouterApiKey.trim());
+
   return (
-    <main className="flex h-dvh min-h-[720px] flex-col overflow-hidden text-zinc-950">
-      <header className="bg-white/65 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4">
+    <main className="flex h-dvh min-h-[720px] flex-col overflow-hidden px-4 py-4 text-zinc-950">
+      <header className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-4 pb-4">
+        <div className="flex min-w-0 items-center gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white shadow-lg shadow-zinc-900/10">
               <Bot className="size-5" aria-hidden="true" />
@@ -565,29 +617,47 @@ ${contextText}
             </div>
           </div>
         </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            className={`hidden h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition sm:inline-flex ${
+              hasApiKey
+                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
+                : "border-amber-500/25 bg-amber-400/15 text-amber-800"
+            }`}
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            title="Open settings"
+          >
+            <KeyRound className="size-4" aria-hidden="true" />
+            {hasApiKey ? "Key saved" : "Add key"}
+          </button>
+          <button
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-black/10 bg-white/75 px-3 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/10"
+            type="button"
+            onClick={handleNewSession}
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            <span className="hidden sm:inline">New Chat</span>
+          </button>
+          <button
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 focus:outline-none focus:ring-4 focus:ring-zinc-900/15"
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="size-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Settings</span>
+          </button>
+        </div>
       </header>
 
-      <SettingsPanel
-        settings={effectiveSettings}
-        models={models}
-        modelsLoading={modelsLoading}
-        modelsError={modelsError}
-        modelsSource={modelsSource}
-        recordCount={messages.length}
-        feedbackCount={feedback.length}
-        onChange={setSettings}
-        onRefreshModels={loadModels}
-        onNewSession={handleNewSession}
-      />
-
-      <HistoryPanel
-        sessions={sessions}
-        currentSessionId={activeSessionId}
-        onSelectSession={setCurrentSessionId}
-        onDeleteSession={handleDeleteSession}
-      />
-
-      <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 overflow-hidden border-x border-black/10 bg-white/20 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+      <div className="mx-auto grid min-h-0 w-full max-w-[1500px] flex-1 overflow-hidden rounded-lg border border-black/10 bg-white/35 shadow-xl shadow-zinc-900/5 backdrop-blur-xl lg:grid-cols-[280px_minmax(0,1fr)_410px]">
+        <HistoryPanel
+          sessions={sessions}
+          currentSessionId={activeSessionId}
+          onSelectSession={setCurrentSessionId}
+          onRenameSession={handleRenameSession}
+          onDeleteSession={handleDeleteSession}
+        />
         <ChatPanel
           messages={messages}
           value={draft}
@@ -602,6 +672,18 @@ ${contextText}
           isPending={coachPending}
         />
       </div>
+
+      <SettingsPanel
+        open={settingsOpen}
+        settings={effectiveSettings}
+        models={models}
+        modelsLoading={modelsLoading}
+        modelsError={modelsError}
+        modelsSource={modelsSource}
+        onChange={setSettings}
+        onRefreshModels={refreshModels}
+        onClose={() => setSettingsOpen(false)}
+      />
     </main>
   );
 }
