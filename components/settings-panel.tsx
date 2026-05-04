@@ -13,6 +13,7 @@ import {
 import { useState } from "react";
 import {
   COACH_CONTEXT_OPTIONS,
+  TTS_VOICE_OPTIONS,
   type CoachContextMode,
   type CoachExplanationLanguage,
   type CoachSettings,
@@ -205,12 +206,17 @@ export function SettingsPanel({
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
                   Voice
                 </label>
-                <input
+                <select
                   className="h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
                   value={settings.ttsVoice}
                   onChange={(event) => update({ ttsVoice: event.target.value })}
-                  placeholder="nova"
-                />
+                >
+                  {TTS_VOICE_OPTIONS.map((voice) => (
+                    <option key={voice.value} value={voice.value}>
+                      {voice.label} · {voice.tone}
+                    </option>
+                  ))}
+                </select>
               </div>
             </section>
 

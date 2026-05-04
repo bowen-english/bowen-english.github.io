@@ -71,6 +71,12 @@ export type ScenarioPreset = {
   value: string;
 };
 
+export type TtsVoiceOption = {
+  value: string;
+  label: string;
+  tone: string;
+};
+
 export type CoachContextOption = {
   value: CoachContextMode;
   label: string;
@@ -83,6 +89,22 @@ export const DEFAULT_COACH_MODEL = "google/gemini-3.1-flash-lite-preview";
 export const DEFAULT_TTS_MODEL = "openai/gpt-4o-mini-tts-2025-12-15";
 
 export const DEFAULT_TTS_VOICE = "nova";
+
+export const TTS_VOICE_OPTIONS: TtsVoiceOption[] = [
+  { value: "alloy", label: "Alloy", tone: "balanced" },
+  { value: "ash", label: "Ash", tone: "calm" },
+  { value: "ballad", label: "Ballad", tone: "melodic" },
+  { value: "coral", label: "Coral", tone: "bright" },
+  { value: "echo", label: "Echo", tone: "deep" },
+  { value: "fable", label: "Fable", tone: "warm" },
+  { value: "nova", label: "Nova", tone: "friendly" },
+  { value: "onyx", label: "Onyx", tone: "grounded" },
+  { value: "sage", label: "Sage", tone: "measured" },
+  { value: "shimmer", label: "Shimmer", tone: "light" },
+  { value: "verse", label: "Verse", tone: "expressive" },
+  { value: "marin", label: "Marin", tone: "natural" },
+  { value: "cedar", label: "Cedar", tone: "natural" },
+];
 
 export const COACH_CONTEXT_OPTIONS: CoachContextOption[] = [
   { value: "latest_user", label: "Latest user sentence only" },
