@@ -118,6 +118,87 @@ export async function callOpenRouterFromBrowser({
   return content;
 }
 
+export async function callOpenRouterSpeechFromBrowser({
+  apiKey,
+  model,
+  input,
+  voice,
+  instructions,
+}: {
+  apiKey: string;
+  model: string;
+  input: string;
+  voice: string;
+  instructions?: string;
+}) {
+  if (!apiKey.trim()) {
+    throw new Error("OpenRouter API key is not configured.");
+  }
+
+  if (!model.trim()) {
+    throw new Error("TTS model name is not configured.");
+  }
+
+  if (!voice.trim()) {
+    throw new Error("TTS voice is not configured.");
+  }
+
+  if (!input.trim()) {
+    throw new Error("There is no text to speak.");
+  }
+
+  const response = await fetch("https://openrouter.ai/api/v1/audio/speech", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey.trim()}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": window.location.origin,
+      "X-Title": "English Shadow Coach",
+    },
+    body: JSON.stringify({
+      model,
+      input,
+      voice,
+      response_format: "mp3",
+      ...(instructions
+        ? {
+            provider: {
+              options: {
+                openai: {
+                  instructions,
+                },
+              },
+            },
+          }
+        : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    const data = contentType.includes("application/json")
+      ? ((await response.json().catch(() => null)) as unknown)
+      : await response.text().catch(() => "");
+
+    throw new Error(
+      typeof data === "string" && data.trim()
+        ? data
+        : getErrorMessage(
+            data,
+            `OpenRouter TTS request failed (${response.status}).`,
+          ),
+    );
+  }
+
+  const blob = await response.blob();
+
+  if (blob.size === 0) {
+    throw new Error("OpenRouter returned empty audio.");
+  }
+
+  return blob;
+}
+
 async function fetchModelEndpoint({
   apiKey,
   endpoint,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, KeyRound, Plus, Settings } from "lucide-react";
 import { ChatPanel } from "@/components/chat-panel";
 import { CoachPanel } from "@/components/coach-panel";
@@ -8,7 +8,13 @@ import { HistoryPanel } from "@/components/history-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { useLocalStorageState } from "@/hooks/use-local-storage-state";
 import {
+  deleteCachedAudioBlob,
+  getCachedAudioBlob,
+  putCachedAudioBlob,
+} from "@/lib/audio-cache";
+import {
   callOpenRouterFromBrowser,
+  callOpenRouterSpeechFromBrowser,
   fetchOpenRouterModelsFromBrowser,
 } from "@/lib/openrouter-browser";
 import {
@@ -70,6 +76,8 @@ function createSession({
     title: getSessionTitle(messages),
     titleEdited: false,
     scenario: "",
+    speechEnabled: false,
+    hideAssistantText: false,
     messages,
     feedback,
     createdAt: now,
@@ -79,7 +87,16 @@ function createSession({
 
 function applySessionPatch(
   session: ConversationSession,
-  patch: Partial<Pick<ConversationSession, "messages" | "feedback" | "scenario">>,
+  patch: Partial<
+    Pick<
+      ConversationSession,
+      | "messages"
+      | "feedback"
+      | "scenario"
+      | "speechEnabled"
+      | "hideAssistantText"
+    >
+  >,
 ) {
   const messages = patch.messages ?? session.messages;
 
@@ -91,19 +108,41 @@ function applySessionPatch(
   };
 }
 
-function buildChatSystemPrompt(scenario: string) {
+function buildChatSystemPrompt(scenario: string, speechEnabled: boolean) {
   const trimmedScenario = scenario.trim();
+  const speechPrompt = speechEnabled
+    ? `
+
+Speech mode:
+- Your reply may be spoken aloud with text-to-speech.
+- Use natural spoken English: clear, conversational, and easy to follow by ear.
+- Prefer short sentences and smooth phrasing over dense lists or written-style structure.
+- Do not mention that speech mode is enabled unless it is directly relevant.`
+    : "";
 
   if (!trimmedScenario) {
-    return CHAT_PARTNER_SYSTEM_PROMPT;
+    return `${CHAT_PARTNER_SYSTEM_PROMPT}${speechPrompt}`;
   }
 
-  return `${CHAT_PARTNER_SYSTEM_PROMPT}
+  return `${CHAT_PARTNER_SYSTEM_PROMPT}${speechPrompt}
 
 Scenario:
 ${trimmedScenario}
 
 Stay inside this scenario naturally. If the user's message does not fit the scenario perfectly, adapt gracefully and keep the conversation moving.`;
+}
+
+function buildCoachSystemPrompt(speechEnabled: boolean) {
+  if (!speechEnabled) {
+    return SILENT_COACH_SYSTEM_PROMPT;
+  }
+
+  return `${SILENT_COACH_SYSTEM_PROMPT}
+
+Speech mode:
+- Treat the user's message as spoken English practice.
+- Prioritize feedback on natural spoken phrasing, pronunciation-friendly wording, rhythm, and conversational tone.
+- Do not overcorrect informal spoken English that sounds natural in conversation.`;
 }
 
 function readStoredArray<T>(key: string): T[] {
@@ -123,6 +162,8 @@ function mergeSettings(settings: Partial<CoachSettings>): CoachSettings {
     openRouterApiKey: settings.openRouterApiKey ?? "",
     chatModel: settings.chatModel || DEFAULT_SETTINGS.chatModel,
     coachModel: settings.coachModel || DEFAULT_SETTINGS.coachModel,
+    ttsModel: settings.ttsModel || DEFAULT_SETTINGS.ttsModel,
+    ttsVoice: settings.ttsVoice || DEFAULT_SETTINGS.ttsVoice,
     contextMode: settings.contextMode || DEFAULT_SETTINGS.contextMode,
     explanationLanguage:
       settings.explanationLanguage || DEFAULT_SETTINGS.explanationLanguage,
@@ -227,6 +268,18 @@ function normalizeCoachResponse(raw: string, messageId: string): CoachResponse {
   };
 }
 
+function getAssistantAudioCacheKey({
+  messageId,
+  model,
+  voice,
+}: {
+  messageId: string;
+  model: string;
+  voice: string;
+}) {
+  return `assistant-audio:${messageId}:${model}:${voice}`;
+}
+
 export default function Home() {
   const [sessions, setSessions, sessionsHydrated] = useLocalStorageState<
     ConversationSession[]
@@ -260,6 +313,11 @@ export default function Home() {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [speechPendingIds, setSpeechPendingIds] = useState<string[]>([]);
+  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const audioUrlsRef = useRef(new Map<string, string>());
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   const activeSession =
     sessions.find((session) => session.id === currentSessionId) ??
@@ -269,6 +327,8 @@ export default function Home() {
   const messages = activeSession?.messages ?? EMPTY_MESSAGES;
   const feedback = activeSession?.feedback ?? EMPTY_FEEDBACK;
   const scenario = activeSession?.scenario ?? "";
+  const speechEnabled = Boolean(activeSession?.speechEnabled);
+  const hideAssistantText = Boolean(activeSession?.hideAssistantText);
 
   const loadPublicModels = useCallback(async () => {
     setModelsLoading(true);
@@ -382,11 +442,29 @@ export default function Home() {
     };
   }, [loadPublicModels]);
 
+  useEffect(() => {
+    const audioUrls = audioUrlsRef.current;
+
+    return () => {
+      audioUrls.forEach((audioUrl) => {
+        URL.revokeObjectURL(audioUrl);
+      });
+      audioUrls.clear();
+    };
+  }, []);
+
   const updateSession = useCallback(
     (
       sessionId: string,
       patch: Partial<
-        Pick<ConversationSession, "messages" | "feedback" | "scenario">
+        Pick<
+          ConversationSession,
+          | "messages"
+          | "feedback"
+          | "scenario"
+          | "speechEnabled"
+          | "hideAssistantText"
+        >
       >,
     ) => {
       setSessions((current) =>
@@ -398,11 +476,97 @@ export default function Home() {
     [setSessions],
   );
 
+  const playAssistantMessageAudio = useCallback(
+    async (message: ChatMessage) => {
+      if (message.role !== "assistant") {
+        return;
+      }
+
+      if (!effectiveSettings.openRouterApiKey.trim()) {
+        const errorMessage = "Add your OpenRouter API key in Settings first.";
+
+        setSpeechError(errorMessage);
+        setSettingsOpen(true);
+        return;
+      }
+
+      const cacheKey = getAssistantAudioCacheKey({
+        messageId: message.id,
+        model: effectiveSettings.ttsModel,
+        voice: effectiveSettings.ttsVoice,
+      });
+
+      setSpeechError(null);
+      setSpeechPendingIds((current) =>
+        current.includes(message.id) ? current : [...current, message.id],
+      );
+
+      try {
+        let audioUrl = audioUrlsRef.current.get(cacheKey);
+
+        if (!audioUrl) {
+          let audioBlob = await getCachedAudioBlob(cacheKey);
+
+          if (!audioBlob) {
+            audioBlob = await callOpenRouterSpeechFromBrowser({
+              apiKey: effectiveSettings.openRouterApiKey,
+              model: effectiveSettings.ttsModel,
+              voice: effectiveSettings.ttsVoice,
+              input: message.content,
+              instructions:
+                "Speak in clear, natural conversational English with a warm, realistic tone. Keep the delivery easy to follow for language practice.",
+            });
+            void putCachedAudioBlob(cacheKey, audioBlob);
+          }
+
+          audioUrl = URL.createObjectURL(audioBlob);
+          audioUrlsRef.current.set(cacheKey, audioUrl);
+        }
+
+        audioPlayerRef.current?.pause();
+
+        const player = new Audio(audioUrl);
+        audioPlayerRef.current = player;
+        player.onended = () => {
+          setPlayingMessageId((current) =>
+            current === message.id ? null : current,
+          );
+        };
+        player.onerror = () => {
+          setPlayingMessageId((current) =>
+            current === message.id ? null : current,
+          );
+          setSpeechError("Audio playback failed.");
+        };
+
+        setPlayingMessageId(message.id);
+        await player.play();
+      } catch (error) {
+        setPlayingMessageId((current) =>
+          current === message.id ? null : current,
+        );
+        setSpeechError(
+          error instanceof Error ? error.message : "Audio playback failed.",
+        );
+      } finally {
+        setSpeechPendingIds((current) =>
+          current.filter((messageId) => messageId !== message.id),
+        );
+      }
+    },
+    [
+      effectiveSettings.openRouterApiKey,
+      effectiveSettings.ttsModel,
+      effectiveSettings.ttsVoice,
+    ],
+  );
+
   const runChatPartner = useCallback(
     async (
       sessionId: string,
       conversation: ChatMessage[],
       conversationScenario: string,
+      conversationSpeechEnabled: boolean,
     ) => {
       setChatPending(true);
       setChatError(null);
@@ -415,7 +579,10 @@ export default function Home() {
           messages: [
             {
               role: "system",
-              content: buildChatSystemPrompt(conversationScenario),
+              content: buildChatSystemPrompt(
+                conversationScenario,
+                conversationSpeechEnabled,
+              ),
             },
             ...conversation
               .slice(-24)
@@ -438,6 +605,10 @@ export default function Home() {
               : session,
           ),
         );
+
+        if (conversationSpeechEnabled) {
+          void playAssistantMessageAudio(assistantMessage);
+        }
       } catch (error) {
         setChatError(
           error instanceof Error ? error.message : "Chat Partner request failed.",
@@ -449,6 +620,7 @@ export default function Home() {
     [
       effectiveSettings.chatModel,
       effectiveSettings.openRouterApiKey,
+      playAssistantMessageAudio,
       setSessions,
     ],
   );
@@ -459,6 +631,7 @@ export default function Home() {
       conversation: ChatMessage[],
       latestUserMessage: ChatMessage,
       conversationScenario: string,
+      conversationSpeechEnabled: boolean,
     ) => {
       setCoachPending(true);
       setCoachError(null);
@@ -481,13 +654,17 @@ export default function Home() {
           temperature: 0.2,
           responseFormat: { type: "json_object" },
           messages: [
-            { role: "system", content: SILENT_COACH_SYSTEM_PROMPT },
+            {
+              role: "system",
+              content: buildCoachSystemPrompt(conversationSpeechEnabled),
+            },
             {
               role: "user",
               content: `
 Scenario:
 ${conversationScenario.trim() || "None"}
 
+Speech mode: ${conversationSpeechEnabled ? "enabled" : "disabled"}
 Context mode: ${effectiveSettings.contextMode}
 Explanation language: ${getExplanationLanguageName(effectiveSettings.explanationLanguage)}
 Write explanation, issues, and reusable pattern in the requested explanation language.
@@ -573,8 +750,14 @@ ${contextText}
       setCurrentSessionId(sessionId);
     }
 
-    void runChatPartner(sessionId, conversation, scenario);
-    void runSilentCoach(sessionId, conversation, userMessage, scenario);
+    void runChatPartner(sessionId, conversation, scenario, speechEnabled);
+    void runSilentCoach(
+      sessionId,
+      conversation,
+      userMessage,
+      scenario,
+      speechEnabled,
+    );
   }, [
     activeSessionId,
     chatPending,
@@ -584,6 +767,7 @@ ${contextText}
     runChatPartner,
     runSilentCoach,
     scenario,
+    speechEnabled,
     setCurrentSessionId,
     setDraft,
     setSessions,
@@ -619,9 +803,21 @@ ${contextText}
 
   const handleDeleteSession = useCallback(
     (sessionId: string) => {
+      const sessionToDelete = sessions.find((session) => session.id === sessionId);
       const nextSessions = sessions.filter((session) => session.id !== sessionId);
 
       setSessions(nextSessions);
+      sessionToDelete?.messages
+        .filter((message) => message.role === "assistant")
+        .forEach((message) => {
+          void deleteCachedAudioBlob(
+            getAssistantAudioCacheKey({
+              messageId: message.id,
+              model: effectiveSettings.ttsModel,
+              voice: effectiveSettings.ttsVoice,
+            }),
+          );
+        });
 
       if (sessionId === activeSessionId) {
         setCurrentSessionId(nextSessions[0]?.id ?? null);
@@ -632,6 +828,8 @@ ${contextText}
     },
     [
       activeSessionId,
+      effectiveSettings.ttsModel,
+      effectiveSettings.ttsVoice,
       sessions,
       setCurrentSessionId,
       setDraft,
@@ -668,6 +866,38 @@ ${contextText}
 
       const session = createSession();
       session.scenario = scenarioText;
+      setSessions((current) => [session, ...current]);
+      setCurrentSessionId(session.id);
+    },
+    [activeSessionId, setCurrentSessionId, setSessions, updateSession],
+  );
+
+  const handleSpeechEnabledChange = useCallback(
+    (enabled: boolean) => {
+      setSpeechError(null);
+
+      if (activeSessionId) {
+        updateSession(activeSessionId, { speechEnabled: enabled });
+        return;
+      }
+
+      const session = createSession();
+      session.speechEnabled = enabled;
+      setSessions((current) => [session, ...current]);
+      setCurrentSessionId(session.id);
+    },
+    [activeSessionId, setCurrentSessionId, setSessions, updateSession],
+  );
+
+  const handleHideAssistantTextChange = useCallback(
+    (hidden: boolean) => {
+      if (activeSessionId) {
+        updateSession(activeSessionId, { hideAssistantText: hidden });
+        return;
+      }
+
+      const session = createSession();
+      session.hideAssistantText = hidden;
       setSessions((current) => [session, ...current]);
       setCurrentSessionId(session.id);
     },
@@ -739,11 +969,18 @@ ${contextText}
           messages={messages}
           scenario={scenario}
           scenarioPresets={effectiveScenarioPresets}
+          speechEnabled={speechEnabled}
+          hideAssistantText={hideAssistantText}
+          speechPendingIds={speechPendingIds}
+          playingMessageId={playingMessageId}
           value={draft}
-          error={chatError}
+          error={chatError ?? speechError}
           isPending={chatPending}
           onScenarioChange={handleScenarioChange}
           onScenarioPresetsChange={setScenarioPresets}
+          onSpeechEnabledChange={handleSpeechEnabledChange}
+          onHideAssistantTextChange={handleHideAssistantTextChange}
+          onPlayAssistantMessage={playAssistantMessageAudio}
           onValueChange={setDraft}
           onSubmit={handleSend}
         />

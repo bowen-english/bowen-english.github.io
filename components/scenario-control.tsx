@@ -209,7 +209,7 @@ export function ScenarioControl({
             className="min-h-28 w-full resize-none rounded-lg border border-black/10 bg-white px-3 py-2 text-sm leading-6 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Example: 我想练习在机场改签航班，Chat Partner 扮演航空公司工作人员。"
+            placeholder="Example: Practice rebooking a flight at the airport. Chat Partner plays the airline agent."
           />
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">

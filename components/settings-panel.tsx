@@ -188,6 +188,32 @@ export function SettingsPanel({
               </div>
             </section>
 
+            <section className="grid gap-4 rounded-lg border border-black/10 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_150px]">
+              <div className="min-w-0">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                  TTS Model
+                </label>
+                <input
+                  className="h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                  value={settings.ttsModel}
+                  onChange={(event) => update({ ttsModel: event.target.value })}
+                  placeholder="openai/gpt-4o-mini-tts-2025-12-15"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                  Voice
+                </label>
+                <input
+                  className="h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                  value={settings.ttsVoice}
+                  onChange={(event) => update({ ttsVoice: event.target.value })}
+                  placeholder="nova"
+                />
+              </div>
+            </section>
+
             <section className="grid gap-4 rounded-lg border border-black/10 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_150px_110px]">
               <div className="min-w-0">
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">

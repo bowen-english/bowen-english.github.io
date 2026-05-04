@@ -20,6 +20,8 @@ export type CoachSettings = {
   openRouterApiKey: string;
   chatModel: string;
   coachModel: string;
+  ttsModel: string;
+  ttsVoice: string;
   contextMode: CoachContextMode;
   explanationLanguage: CoachExplanationLanguage;
   recentTurns: number;
@@ -55,6 +57,8 @@ export type ConversationSession = {
   title: string;
   titleEdited?: boolean;
   scenario?: string;
+  speechEnabled?: boolean;
+  hideAssistantText?: boolean;
   messages: ChatMessage[];
   feedback: CoachFeedback[];
   createdAt: string;
@@ -76,6 +80,10 @@ export const DEFAULT_CHAT_MODEL = "x-ai/grok-4.1-fast";
 
 export const DEFAULT_COACH_MODEL = "google/gemini-3.1-flash-lite-preview";
 
+export const DEFAULT_TTS_MODEL = "openai/gpt-4o-mini-tts-2025-12-15";
+
+export const DEFAULT_TTS_VOICE = "nova";
+
 export const COACH_CONTEXT_OPTIONS: CoachContextOption[] = [
   { value: "latest_user", label: "Latest user sentence only" },
   {
@@ -89,6 +97,8 @@ export const DEFAULT_SETTINGS: CoachSettings = {
   openRouterApiKey: "",
   chatModel: DEFAULT_CHAT_MODEL,
   coachModel: DEFAULT_COACH_MODEL,
+  ttsModel: DEFAULT_TTS_MODEL,
+  ttsVoice: DEFAULT_TTS_VOICE,
   contextMode: "latest_user_with_partner",
   explanationLanguage: "zh",
   recentTurns: 4,
