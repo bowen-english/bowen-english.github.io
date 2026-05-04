@@ -45,6 +45,9 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
   const [showApiKey, setShowApiKey] = useState(false);
   const hasKey = Boolean(settings.openRouterApiKey.trim());
+  const selectedVoice =
+    TTS_VOICE_OPTIONS.find((voice) => voice.value === settings.ttsVoice) ??
+    TTS_VOICE_OPTIONS[0];
 
   const update = (patch: Partial<CoachSettings>) => {
     onChange({ ...settings, ...patch });
@@ -189,7 +192,7 @@ export function SettingsPanel({
               </div>
             </section>
 
-            <section className="grid gap-4 rounded-lg border border-black/10 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_150px]">
+            <section className="grid gap-4 rounded-lg border border-black/10 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
               <div className="min-w-0">
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
                   TTS Model
@@ -213,10 +216,26 @@ export function SettingsPanel({
                 >
                   {TTS_VOICE_OPTIONS.map((voice) => (
                     <option key={voice.value} value={voice.value}>
-                      {voice.label} · {voice.tone}
+                      {voice.label} · {voice.tone} · {voice.bestFor}
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="rounded-lg border border-black/10 bg-zinc-50/80 p-3 sm:col-span-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-bold text-zinc-950">
+                    {selectedVoice.label}
+                  </span>
+                  <span className="rounded-full border border-teal-500/20 bg-teal-500/10 px-2 py-0.5 text-xs font-bold text-teal-700">
+                    {selectedVoice.tone}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-5 text-zinc-600">
+                  {selectedVoice.profile}
+                </p>
+                <p className="mt-1 text-sm leading-5 text-zinc-500">
+                  Best for: {selectedVoice.bestFor}
+                </p>
               </div>
             </section>
 

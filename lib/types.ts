@@ -75,6 +75,8 @@ export type TtsVoiceOption = {
   value: string;
   label: string;
   tone: string;
+  profile: string;
+  bestFor: string;
 };
 
 export type CoachContextOption = {
@@ -91,19 +93,97 @@ export const DEFAULT_TTS_MODEL = "openai/gpt-4o-mini-tts-2025-12-15";
 export const DEFAULT_TTS_VOICE = "nova";
 
 export const TTS_VOICE_OPTIONS: TtsVoiceOption[] = [
-  { value: "alloy", label: "Alloy", tone: "balanced" },
-  { value: "ash", label: "Ash", tone: "calm" },
-  { value: "ballad", label: "Ballad", tone: "melodic" },
-  { value: "coral", label: "Coral", tone: "bright" },
-  { value: "echo", label: "Echo", tone: "deep" },
-  { value: "fable", label: "Fable", tone: "warm" },
-  { value: "nova", label: "Nova", tone: "friendly" },
-  { value: "onyx", label: "Onyx", tone: "grounded" },
-  { value: "sage", label: "Sage", tone: "measured" },
-  { value: "shimmer", label: "Shimmer", tone: "light" },
-  { value: "verse", label: "Verse", tone: "expressive" },
-  { value: "marin", label: "Marin", tone: "natural" },
-  { value: "cedar", label: "Cedar", tone: "natural" },
+  {
+    value: "alloy",
+    label: "Alloy",
+    tone: "balanced",
+    profile: "Neutral range, steady pace, low-drama delivery.",
+    bestFor: "General practice and everyday conversation.",
+  },
+  {
+    value: "ash",
+    label: "Ash",
+    tone: "calm",
+    profile: "Lower, softer, composed delivery with a relaxed feel.",
+    bestFor: "Slow conversation, reflection, and gentle coaching.",
+  },
+  {
+    value: "ballad",
+    label: "Ballad",
+    tone: "melodic",
+    profile: "Smooth, expressive, slightly theatrical cadence.",
+    bestFor: "Storytelling, role-play, and expressive reading.",
+  },
+  {
+    value: "coral",
+    label: "Coral",
+    tone: "bright",
+    profile: "Higher-energy, upbeat, clear delivery.",
+    bestFor: "Friendly chats, travel scenes, and lively practice.",
+  },
+  {
+    value: "echo",
+    label: "Echo",
+    tone: "deep",
+    profile: "Lower range, resonant, direct speaking style.",
+    bestFor: "Interviews, presentations, and confident responses.",
+  },
+  {
+    value: "fable",
+    label: "Fable",
+    tone: "warm",
+    profile: "Warm, characterful, narrative-friendly delivery.",
+    bestFor: "Casual role-play and story-like scenarios.",
+  },
+  {
+    value: "nova",
+    label: "Nova",
+    tone: "friendly",
+    profile: "Clear, bright, approachable conversational sound.",
+    bestFor: "Default daily English practice.",
+  },
+  {
+    value: "onyx",
+    label: "Onyx",
+    tone: "grounded",
+    profile: "Low range, firm, polished delivery.",
+    bestFor: "Professional, formal, or serious scenarios.",
+  },
+  {
+    value: "sage",
+    label: "Sage",
+    tone: "measured",
+    profile: "Even, thoughtful, calm delivery.",
+    bestFor: "Explanations, tutoring scenes, and careful listening.",
+  },
+  {
+    value: "shimmer",
+    label: "Shimmer",
+    tone: "light",
+    profile: "Light, airy, friendly delivery with gentle energy.",
+    bestFor: "Soft daily conversation and beginner-friendly practice.",
+  },
+  {
+    value: "verse",
+    label: "Verse",
+    tone: "expressive",
+    profile: "Dynamic, modern, animated delivery.",
+    bestFor: "Natural banter, expressive scenes, and varied emotion.",
+  },
+  {
+    value: "marin",
+    label: "Marin",
+    tone: "natural",
+    profile: "Natural, fluent, high-quality conversational delivery.",
+    bestFor: "Best-quality everyday speech practice.",
+  },
+  {
+    value: "cedar",
+    label: "Cedar",
+    tone: "natural",
+    profile: "Natural, grounded, high-quality conversational delivery.",
+    bestFor: "Best-quality professional or steady conversation.",
+  },
 ];
 
 export const COACH_CONTEXT_OPTIONS: CoachContextOption[] = [
