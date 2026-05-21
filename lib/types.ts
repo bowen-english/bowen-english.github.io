@@ -84,7 +84,7 @@ export type CoachContextOption = {
   label: string;
 };
 
-export const DEFAULT_CHAT_MODEL = "google/gemini-3.5-flash";
+export const DEFAULT_CHAT_MODEL = "x-ai/grok-4.3";
 
 export const DEFAULT_COACH_MODEL = "google/gemini-3.5-flash";
 

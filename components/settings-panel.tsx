@@ -156,6 +156,7 @@ export function SettingsPanel({
                 value={settings.chatModel}
                 models={models}
                 listId="chat-model-options"
+                placeholder="x-ai/grok-4.3"
                 onChange={(value) => update({ chatModel: value })}
               />
 
@@ -164,6 +165,7 @@ export function SettingsPanel({
                 value={settings.coachModel}
                 models={models}
                 listId="coach-model-options"
+                placeholder="google/gemini-3.5-flash"
                 onChange={(value) => update({ coachModel: value })}
               />
 
@@ -312,12 +314,14 @@ function ModelField({
   value,
   models,
   listId,
+  placeholder,
   onChange,
 }: {
   label: string;
   value: string;
   models: OpenRouterModel[];
   listId: string;
+  placeholder: string;
   onChange: (value: string) => void;
 }) {
   return (
@@ -330,7 +334,7 @@ function ModelField({
         value={value}
         list={listId}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="google/gemini-3.5-flash"
+        placeholder={placeholder}
       />
       <datalist id={listId}>
         {models.map((model) => (

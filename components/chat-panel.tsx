@@ -9,14 +9,17 @@ import {
   useState,
 } from "react";
 import {
+  Check,
   Eye,
   EyeOff,
   Loader2,
+  Pencil,
   Send,
   Sparkles,
   UserRound,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import type { ChatMessage, ScenarioPreset } from "@/lib/types";
 import { ScenarioControl } from "@/components/scenario-control";
@@ -32,11 +35,13 @@ type ChatPanelProps = {
   value: string;
   error: string | null;
   isPending: boolean;
+  canEditMessages: boolean;
   onScenarioChange: (scenario: string) => void;
   onScenarioPresetsChange: (presets: ScenarioPreset[]) => void;
   onSpeechEnabledChange: (enabled: boolean) => void;
   onHideAssistantTextChange: (hidden: boolean) => void;
   onPlayAssistantMessage: (message: ChatMessage) => void;
+  onEditUserMessage: (messageId: string, content: string) => void;
   onValueChange: (value: string) => void;
   onSubmit: () => void;
 };
@@ -52,11 +57,13 @@ export function ChatPanel({
   value,
   error,
   isPending,
+  canEditMessages,
   onScenarioChange,
   onScenarioPresetsChange,
   onSpeechEnabledChange,
   onHideAssistantTextChange,
   onPlayAssistantMessage,
+  onEditUserMessage,
   onValueChange,
   onSubmit,
 }: ChatPanelProps) {
@@ -156,7 +163,9 @@ export function ChatPanel({
                 hideAssistantText={hideAssistantText}
                 isSpeechPending={speechPendingIds.includes(message.id)}
                 isPlaying={playingMessageId === message.id}
+                canEdit={canEditMessages}
                 onPlayAssistantMessage={onPlayAssistantMessage}
+                onEditUserMessage={onEditUserMessage}
               />
             ))}
             {isPending ? (
@@ -245,19 +254,71 @@ function MessageBubble({
   hideAssistantText,
   isSpeechPending,
   isPlaying,
+  canEdit,
   onPlayAssistantMessage,
+  onEditUserMessage,
 }: {
   message: ChatMessage;
   hideAssistantText: boolean;
   isSpeechPending: boolean;
   isPlaying: boolean;
+  canEdit: boolean;
   onPlayAssistantMessage: (message: ChatMessage) => void;
+  onEditUserMessage: (messageId: string, content: string) => void;
 }) {
   const isAssistant = message.role === "assistant";
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(message.content);
+  const editRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (!isEditing) {
+      return;
+    }
+
+    const textarea = editRef.current;
+
+    textarea?.focus();
+    textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
+  }, [isEditing]);
+
+  const saveEdit = () => {
+    const content = draft.trim();
+
+    if (!content) {
+      return;
+    }
+
+    setIsEditing(false);
+
+    if (content !== message.content) {
+      onEditUserMessage(message.id, content);
+    } else {
+      setDraft(message.content);
+    }
+  };
+
+  const cancelEdit = () => {
+    setDraft(message.content);
+    setIsEditing(false);
+  };
+
+  const handleEditKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelEdit();
+      return;
+    }
+
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      saveEdit();
+    }
+  };
 
   return (
     <article
-      className={`flex gap-3 ${
+      className={`group flex gap-3 ${
         message.role === "user" ? "justify-end" : "justify-start"
       }`}
     >
@@ -273,15 +334,60 @@ function MessageBubble({
             : "border border-black/10 bg-white/75 pr-11 text-zinc-800"
         }`}
       >
-        <p
-          className={`whitespace-pre-wrap break-words ${
-            isAssistant && hideAssistantText
-              ? "select-none text-transparent [text-shadow:0_0_10px_rgba(63,63,70,0.55)]"
-              : ""
-          }`}
-        >
-          {message.content}
-        </p>
+        {isEditing ? (
+          <div className="w-[min(32rem,64vw)] max-w-full">
+            <textarea
+              ref={editRef}
+              className="max-h-40 min-h-24 w-full resize-y rounded-md border border-white/15 bg-white/10 px-3 py-2 text-sm leading-6 text-white outline-none transition placeholder:text-white/45 focus:border-teal-300/60 focus:ring-4 focus:ring-teal-300/15"
+              value={draft}
+              rows={3}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={handleEditKeyDown}
+            />
+            <div className="mt-2 flex justify-end gap-1.5">
+              <button
+                className="flex size-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-4 focus:ring-white/10"
+                type="button"
+                onClick={cancelEdit}
+                title="Cancel edit"
+              >
+                <X className="size-3.5" aria-hidden="true" />
+              </button>
+              <button
+                className="flex size-8 items-center justify-center rounded-lg bg-teal-500 text-white transition hover:bg-teal-400 focus:outline-none focus:ring-4 focus:ring-teal-300/20 disabled:cursor-not-allowed disabled:opacity-45"
+                type="button"
+                onClick={saveEdit}
+                disabled={!draft.trim()}
+                title="Save edit"
+              >
+                <Check className="size-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p
+            className={`whitespace-pre-wrap break-words ${
+              isAssistant && hideAssistantText
+                ? "select-none text-transparent [text-shadow:0_0_10px_rgba(63,63,70,0.55)]"
+                : ""
+            }`}
+          >
+            {message.content}
+          </p>
+        )}
+        {!isAssistant && canEdit && !isEditing ? (
+          <button
+            className="absolute -left-9 top-2 flex size-7 items-center justify-center rounded-lg border border-black/10 bg-white/80 text-zinc-500 opacity-0 shadow-sm transition hover:bg-white hover:text-zinc-950 focus:opacity-100 focus:outline-none focus:ring-4 focus:ring-zinc-900/10 group-hover:opacity-100"
+            type="button"
+            onClick={() => {
+              setDraft(message.content);
+              setIsEditing(true);
+            }}
+            title="Edit message"
+          >
+            <Pencil className="size-3.5" aria-hidden="true" />
+          </button>
+        ) : null}
         {isAssistant ? (
           <button
             className={`absolute right-2 top-2 flex size-7 items-center justify-center rounded-lg border transition focus:outline-none focus:ring-4 ${

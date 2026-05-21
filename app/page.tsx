@@ -45,6 +45,7 @@ const EMPTY_FEEDBACK: CoachFeedback[] = [];
 const LEGACY_DEFAULT_CHAT_MODELS = new Set([
   "x-ai/grok-4.1-fast",
   "x-ai/grok-4.3-fast",
+  "google/gemini-3.5-flash",
 ]);
 const LEGACY_DEFAULT_COACH_MODELS = new Set([
   "google/gemini-3.1-flash-lite-preview",
@@ -818,6 +819,112 @@ ${contextText}
     updateSession,
   ]);
 
+  const handleEditUserMessage = useCallback(
+    (messageId: string, content: string) => {
+      const trimmedContent = content.trim();
+
+      if (!trimmedContent || chatPending || coachPending || !activeSession) {
+        return;
+      }
+
+      if (!effectiveSettings.openRouterApiKey.trim()) {
+        const message = "Add your OpenRouter API key in Settings before editing.";
+
+        setChatError(message);
+        setCoachError(message);
+        setSettingsOpen(true);
+        return;
+      }
+
+      const messageIndex = activeSession.messages.findIndex(
+        (message) => message.id === messageId && message.role === "user",
+      );
+
+      if (messageIndex === -1) {
+        return;
+      }
+
+      const editedMessage: ChatMessage = {
+        ...activeSession.messages[messageIndex],
+        content: trimmedContent,
+      };
+      const conversation = [
+        ...activeSession.messages.slice(0, messageIndex),
+        editedMessage,
+      ];
+      const removedMessages = activeSession.messages.slice(messageIndex + 1);
+      const rerunUserMessageIds = new Set(
+        activeSession.messages
+          .slice(messageIndex)
+          .filter((message) => message.role === "user")
+          .map((message) => message.id),
+      );
+      const removedAssistantIds = new Set(
+        removedMessages
+          .filter((message) => message.role === "assistant")
+          .map((message) => message.id),
+      );
+      const nextFeedback = activeSession.feedback.filter(
+        (item) => !rerunUserMessageIds.has(item.messageId),
+      );
+
+      if (playingMessageId && removedAssistantIds.has(playingMessageId)) {
+        audioPlayerRef.current?.pause();
+        setPlayingMessageId(null);
+      }
+
+      setSpeechPendingIds((current) =>
+        current.filter((messageId) => !removedAssistantIds.has(messageId)),
+      );
+      removedMessages
+        .filter((message) => message.role === "assistant")
+        .forEach((message) => {
+          void deleteCachedAudioBlob(
+            getAssistantAudioCacheKey({
+              messageId: message.id,
+              model: effectiveSettings.ttsModel,
+              voice: effectiveSettings.ttsVoice,
+            }),
+          );
+        });
+
+      setChatError(null);
+      setCoachError(null);
+      updateSession(activeSession.id, {
+        messages: conversation,
+        feedback: nextFeedback,
+      });
+
+      void runChatPartner(
+        activeSession.id,
+        conversation,
+        scenario,
+        speechEnabled,
+      );
+      void runSilentCoach(
+        activeSession.id,
+        conversation,
+        editedMessage,
+        scenario,
+        speechEnabled,
+      );
+    },
+    [
+      activeSession,
+      chatPending,
+      coachPending,
+      effectiveSettings.openRouterApiKey,
+      effectiveSettings.ttsModel,
+      effectiveSettings.ttsVoice,
+      playingMessageId,
+      runChatPartner,
+      runSilentCoach,
+      scenario,
+      speechEnabled,
+      updateSession,
+    ],
+  );
+
   const handleNewSession = useCallback(() => {
     if (
       activeSession &&
@@ -1020,11 +1127,13 @@ ${contextText}
           value={draft}
           error={chatError ?? speechError}
           isPending={chatPending}
+          canEditMessages={!chatPending && !coachPending}
           onScenarioChange={handleScenarioChange}
           onScenarioPresetsChange={setScenarioPresets}
           onSpeechEnabledChange={handleSpeechEnabledChange}
           onHideAssistantTextChange={handleHideAssistantTextChange}
           onPlayAssistantMessage={playAssistantMessageAudio}
+          onEditUserMessage={handleEditUserMessage}
           onValueChange={setDraft}
           onSubmit={handleSend}
         />
