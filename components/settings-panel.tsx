@@ -201,7 +201,7 @@ export function SettingsPanel({
                   className="h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
                   value={settings.ttsModel}
                   onChange={(event) => update({ ttsModel: event.target.value })}
-                  placeholder="openai/gpt-4o-mini-tts-2025-12-15"
+                  placeholder="google/gemini-3.5-flash"
                 />
               </div>
 
@@ -330,7 +330,7 @@ function ModelField({
         value={value}
         list={listId}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="openai/gpt-4.1-mini"
+        placeholder="google/gemini-3.5-flash"
       />
       <datalist id={listId}>
         {models.map((model) => (

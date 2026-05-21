@@ -84,11 +84,11 @@ export type CoachContextOption = {
   label: string;
 };
 
-export const DEFAULT_CHAT_MODEL = "x-ai/grok-4.1-fast";
+export const DEFAULT_CHAT_MODEL = "google/gemini-3.5-flash";
 
-export const DEFAULT_COACH_MODEL = "google/gemini-3.1-flash-lite-preview";
+export const DEFAULT_COACH_MODEL = "google/gemini-3.5-flash";
 
-export const DEFAULT_TTS_MODEL = "openai/gpt-4o-mini-tts-2025-12-15";
+export const DEFAULT_TTS_MODEL = "google/gemini-3.5-flash";
 
 export const DEFAULT_TTS_VOICE = "nova";
 

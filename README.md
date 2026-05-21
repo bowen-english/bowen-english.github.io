@@ -21,8 +21,9 @@ Open the app, paste your OpenRouter API key into Settings, and it will be saved 
 
 The default models are:
 
-- Chat Partner: `x-ai/grok-4.1-fast`
-- Silent Coach: `google/gemini-3.1-flash-lite-preview`
+- Chat Partner: `google/gemini-3.5-flash`
+- Silent Coach: `google/gemini-3.5-flash`
+- TTS: `google/gemini-3.5-flash`
 
 The model fields are editable in the UI and saved locally.
 
