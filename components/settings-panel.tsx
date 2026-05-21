@@ -59,31 +59,31 @@ export function SettingsPanel({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/35 px-4 py-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#26231f]/32 px-4 py-6 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-title"
     >
-      <section className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-black/10 bg-white shadow-2xl shadow-zinc-900/20">
-        <header className="flex items-center justify-between border-b border-black/10 px-5 py-4">
+      <section className="animate-soft-rise flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-stone-900/10 bg-[#fffdf8]/95 shadow-2xl shadow-stone-900/15">
+        <header className="flex items-center justify-between border-b border-stone-900/10 bg-[#fffdf8]/80 px-5 py-4 backdrop-blur">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white">
+            <div className="shine-sweep flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#2f3733] text-white shadow-sm shadow-stone-900/10">
               <SlidersHorizontal className="size-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <h2
                 id="settings-title"
-                className="truncate text-lg font-bold text-zinc-950"
+                className="truncate text-lg font-bold text-[#26231f]"
               >
                 Settings
               </h2>
-              <p className="truncate text-sm text-zinc-500">
+              <p className="truncate text-sm text-stone-500">
                 Saved locally in this browser.
               </p>
             </div>
           </div>
           <button
-            className="flex size-10 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950 focus:outline-none focus:ring-4 focus:ring-zinc-900/10"
+            className="flex size-10 items-center justify-center rounded-lg text-stone-500 transition-all duration-200 hover:-translate-y-0.5 hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-4 focus:ring-stone-900/10"
             type="button"
             onClick={onClose}
             title="Close settings"
@@ -94,21 +94,21 @@ export function SettingsPanel({
 
         <div className="min-h-0 overflow-y-auto px-5 py-5">
           <div className="grid gap-5">
-            <section className="rounded-lg border border-black/10 bg-zinc-50/80 p-4">
+            <section className="rounded-lg border border-stone-900/10 bg-stone-50/70 p-4 shadow-sm shadow-stone-900/[0.04]">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-zinc-600">
+                  <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-stone-600">
                     OpenRouter
                   </h3>
-                  <p className="mt-1 text-sm text-zinc-500">
+                  <p className="mt-1 text-sm text-stone-500">
                     Your API key stays in localStorage and is never committed.
                   </p>
                 </div>
                 <span
                   className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${
                     hasKey
-                      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
-                      : "border-amber-500/25 bg-amber-400/15 text-amber-800"
+                      ? "border-[#0f6f68]/20 bg-[#eef6f3] text-[#0f6f68]"
+                      : "border-[#9f7a31]/20 bg-[#f7efe0] text-[#7a5d22]"
                   }`}
                 >
                   {hasKey ? (
@@ -120,12 +120,12 @@ export function SettingsPanel({
                 </span>
               </div>
 
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                 API Key
               </label>
-              <div className="flex h-11 rounded-lg border border-black/10 bg-white focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-500/10">
+              <div className="flex h-11 rounded-lg border border-stone-900/10 bg-[#fffdf8] transition-all duration-200 focus-within:border-[#0f6f68]/45 focus-within:shadow-md focus-within:shadow-[#0f6f68]/10 focus-within:ring-4 focus-within:ring-[#0f6f68]/10">
                 <input
-                  className="min-w-0 flex-1 bg-transparent px-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
+                  className="min-w-0 flex-1 bg-transparent px-3 text-sm text-stone-900 outline-none placeholder:text-stone-400"
                   value={settings.openRouterApiKey}
                   type={showApiKey ? "text" : "password"}
                   autoComplete="off"
@@ -136,7 +136,7 @@ export function SettingsPanel({
                   placeholder="sk-or-v1-..."
                 />
                 <button
-                  className="flex size-11 shrink-0 items-center justify-center rounded-r-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-r-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
                   type="button"
                   onClick={() => setShowApiKey((current) => !current)}
                   title={showApiKey ? "Hide API key" : "Show API key"}
@@ -150,7 +150,7 @@ export function SettingsPanel({
               </div>
             </section>
 
-            <section className="grid gap-4 rounded-lg border border-black/10 bg-white p-4 sm:grid-cols-2">
+            <section className="grid gap-4 rounded-lg border border-stone-900/10 bg-[#fffdf8] p-4 shadow-sm shadow-stone-900/[0.04] sm:grid-cols-2">
               <ModelField
                 label="Chat Model"
                 value={settings.chatModel}
@@ -171,7 +171,7 @@ export function SettingsPanel({
 
               <div className="sm:col-span-2">
                 <button
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-black/10 bg-zinc-950 px-3 text-sm font-semibold text-white transition hover:bg-zinc-800 focus:outline-none focus:ring-4 focus:ring-zinc-900/15 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="shine-sweep inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-900/10 bg-[#2f3733] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#252d29] focus:outline-none focus:ring-4 focus:ring-[#0f6f68]/15 disabled:cursor-not-allowed disabled:opacity-45"
                   type="button"
                   onClick={onRefreshModels}
                   disabled={modelsLoading}
@@ -183,7 +183,7 @@ export function SettingsPanel({
                   )}
                   Refresh models
                 </button>
-                <span className="ml-3 text-sm text-zinc-500">
+                <span className="ml-3 text-sm text-stone-500">
                   {modelsLoading
                     ? "Loading OpenRouter models..."
                     : `${models.length} models · ${modelsSource === "user" ? "account list" : "public list"}`}
@@ -194,13 +194,13 @@ export function SettingsPanel({
               </div>
             </section>
 
-            <section className="grid gap-4 rounded-lg border border-black/10 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+            <section className="grid gap-4 rounded-lg border border-stone-900/10 bg-[#fffdf8] p-4 shadow-sm shadow-stone-900/[0.04] sm:grid-cols-[minmax(0,1fr)_220px]">
               <div className="min-w-0">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                   TTS Model
                 </label>
                 <input
-                  className="h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
                   value={settings.ttsModel}
                   onChange={(event) => update({ ttsModel: event.target.value })}
                   placeholder="openai/gpt-4o-mini-tts-2025-12-15"
@@ -208,11 +208,11 @@ export function SettingsPanel({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                   Voice
                 </label>
                 <select
-                  className="h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
                   value={settings.ttsVoice}
                   onChange={(event) => update({ ttsVoice: event.target.value })}
                 >
@@ -223,31 +223,31 @@ export function SettingsPanel({
                   ))}
                 </select>
               </div>
-              <div className="rounded-lg border border-black/10 bg-zinc-50/80 p-3 sm:col-span-2">
+              <div className="rounded-lg border border-stone-900/10 bg-stone-50/80 p-3 sm:col-span-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-bold text-zinc-950">
+                  <span className="text-sm font-bold text-[#26231f]">
                     {selectedVoice.label}
                   </span>
-                  <span className="rounded-full border border-teal-500/20 bg-teal-500/10 px-2 py-0.5 text-xs font-bold text-teal-700">
+                  <span className="rounded-full border border-[#0f6f68]/15 bg-[#eef6f3] px-2 py-0.5 text-xs font-bold text-[#0f6f68]">
                     {selectedVoice.tone}
                   </span>
                 </div>
-                <p className="mt-2 text-sm leading-5 text-zinc-600">
+                <p className="mt-2 text-sm leading-5 text-stone-600">
                   {selectedVoice.profile}
                 </p>
-                <p className="mt-1 text-sm leading-5 text-zinc-500">
+                <p className="mt-1 text-sm leading-5 text-stone-500">
                   Best for: {selectedVoice.bestFor}
                 </p>
               </div>
             </section>
 
-            <section className="grid gap-4 rounded-lg border border-black/10 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_150px_110px]">
+            <section className="grid gap-4 rounded-lg border border-stone-900/10 bg-[#fffdf8] p-4 shadow-sm shadow-stone-900/[0.04] sm:grid-cols-[minmax(0,1fr)_150px_110px]">
               <div className="min-w-0">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                   Coach Context
                 </label>
                 <select
-                  className="h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
                   value={settings.contextMode}
                   onChange={(event) =>
                     update({
@@ -264,11 +264,11 @@ export function SettingsPanel({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                   Explanation
                 </label>
                 <select
-                  className="h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
                   value={settings.explanationLanguage}
                   onChange={(event) =>
                     update({
@@ -283,11 +283,11 @@ export function SettingsPanel({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                   Turns
                 </label>
                 <input
-                  className="h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10 disabled:cursor-not-allowed disabled:opacity-45"
                   type="number"
                   min={1}
                   max={12}
@@ -326,11 +326,11 @@ function ModelField({
 }) {
   return (
     <div className="min-w-0">
-      <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+      <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
         {label}
       </label>
       <input
-        className="h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+        className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
         value={value}
         list={listId}
         onChange={(event) => onChange(event.target.value)}

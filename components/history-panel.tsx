@@ -47,21 +47,21 @@ export function HistoryPanel({
   };
 
   return (
-    <aside className="flex min-h-0 flex-col border-black/10 bg-white/45 lg:border-r">
-      <div className="flex items-center gap-2 border-b border-black/10 px-4 py-3">
-        <MessageSquareText className="size-4 text-teal-700" aria-hidden="true" />
-        <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-zinc-950">
+    <aside className="flex min-h-0 flex-col border-stone-900/10 bg-[#fffdf8]/60 lg:border-r">
+      <div className="flex items-center gap-2 border-b border-stone-900/10 bg-[#fffdf8]/60 px-4 py-3 backdrop-blur">
+        <MessageSquareText className="size-4 text-[#0f6f68]" aria-hidden="true" />
+        <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[#26231f]">
           History
         </h2>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {sessions.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-black/15 px-3 py-4 text-sm leading-6 text-zinc-500">
+          <p className="animate-soft-rise rounded-lg border border-dashed border-stone-900/15 bg-[#fffdf8]/55 px-3 py-4 text-sm leading-6 text-stone-500">
             No saved conversations yet.
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {sessions.map((session) => {
               const isActive = session.id === currentSessionId;
               const isEditing = session.id === editingId;
@@ -69,32 +69,32 @@ export function HistoryPanel({
               return (
                 <article
                   key={session.id}
-                  className={`rounded-lg border p-2 transition ${
+                  className={`group animate-soft-rise relative min-h-[86px] overflow-hidden rounded-lg border px-4 py-3.5 transition-all duration-200 ${
                     isActive
-                      ? "border-zinc-950 bg-zinc-950 text-white shadow-sm shadow-zinc-900/10"
-                      : "border-black/10 bg-white/75 text-zinc-800 hover:border-teal-500/30"
+                      ? "border-[#0f6f68]/20 bg-[#f1f8f5] text-[#26231f] shadow-sm shadow-stone-900/[0.04] before:absolute before:inset-y-4 before:left-0 before:w-0.5 before:rounded-r-full before:bg-[#0f6f68]"
+                      : "border-stone-900/10 bg-[#fffdf8]/80 text-stone-800 shadow-sm shadow-stone-900/[0.04] hover:-translate-y-0.5 hover:border-[#0f6f68]/20 hover:bg-[#fffdf8] hover:shadow-md"
                   }`}
                 >
                   {isEditing ? (
                     <form
-                      className="flex items-center gap-1"
+                      className="flex min-h-14 items-center gap-2"
                       onSubmit={(event) => submitRename(event, session)}
                     >
                       <input
-                        className="h-9 min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2 text-sm font-semibold text-zinc-950 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10"
+                        className="h-9 min-w-0 flex-1 rounded-lg border border-stone-900/10 bg-[#fffdf8] px-2 text-sm font-semibold text-[#26231f] outline-none transition focus:border-[#0f6f68]/45 focus:ring-4 focus:ring-[#0f6f68]/10"
                         value={draftTitle}
                         autoFocus
                         onChange={(event) => setDraftTitle(event.target.value)}
                       />
                       <button
-                        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal-600 text-white transition hover:bg-teal-700"
+                        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#0f6f68] text-white shadow-sm shadow-[#0f6f68]/15 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0b5f59]"
                         type="submit"
                         title="Save name"
                       >
                         <Check className="size-4" aria-hidden="true" />
                       </button>
                       <button
-                        className="flex size-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950"
+                        className="flex size-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-all duration-200 hover:-translate-y-0.5 hover:bg-stone-100 hover:text-stone-950"
                         type="button"
                         onClick={cancelEditing}
                         title="Cancel rename"
@@ -103,49 +103,51 @@ export function HistoryPanel({
                       </button>
                     </form>
                   ) : (
-                    <div className="flex items-start gap-2">
+                    <div className="relative">
                       <button
-                        className="min-w-0 flex-1 text-left"
+                        className="block w-full min-w-0 pr-16 text-left"
                         type="button"
                         onClick={() => onSelectSession(session.id)}
                         title={session.title}
                       >
-                        <span className="block truncate text-sm font-semibold">
+                        <span className="block truncate text-[15px] font-semibold leading-5">
                           {session.title}
                         </span>
                         <span
-                          className={`mt-1 block text-xs ${
-                            isActive ? "text-white/55" : "text-zinc-400"
+                          className={`mt-2 block text-[13px] leading-5 ${
+                            isActive ? "text-stone-500" : "text-stone-400"
                           }`}
                         >
                           {session.messages.length} messages ·{" "}
                           {session.feedback.length} notes
                         </span>
                       </button>
-                      <button
-                        className={`flex size-8 shrink-0 items-center justify-center rounded-lg transition ${
-                          isActive
-                            ? "text-white/65 hover:bg-white/10 hover:text-white"
-                            : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900"
-                        }`}
-                        type="button"
-                        onClick={() => startEditing(session)}
-                        title="Rename conversation"
-                      >
-                        <Pencil className="size-3.5" aria-hidden="true" />
-                      </button>
-                      <button
-                        className={`flex size-8 shrink-0 items-center justify-center rounded-lg transition ${
-                          isActive
-                            ? "text-white/65 hover:bg-white/10 hover:text-white"
-                            : "text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
-                        }`}
-                        type="button"
-                        onClick={() => onDeleteSession(session.id)}
-                        title="Delete conversation"
-                      >
-                        <Trash2 className="size-3.5" aria-hidden="true" />
-                      </button>
+                      <div className="absolute right-0 top-0 flex translate-y-0.5 gap-1 opacity-0 transition-all duration-200 group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100">
+                        <button
+                          className={`flex size-8 shrink-0 items-center justify-center rounded-lg transition ${
+                            isActive
+                              ? "text-stone-500 hover:bg-white/65 hover:text-[#26231f]"
+                              : "text-stone-400 hover:bg-stone-100 hover:text-stone-900"
+                          }`}
+                          type="button"
+                          onClick={() => startEditing(session)}
+                          title="Rename conversation"
+                        >
+                          <Pencil className="size-3.5" aria-hidden="true" />
+                        </button>
+                        <button
+                          className={`flex size-8 shrink-0 items-center justify-center rounded-lg transition ${
+                            isActive
+                              ? "text-stone-500 hover:bg-white/65 hover:text-[#26231f]"
+                              : "text-stone-400 hover:bg-rose-50 hover:text-rose-700"
+                          }`}
+                          type="button"
+                          onClick={() => onDeleteSession(session.id)}
+                          title="Delete conversation"
+                        >
+                          <Trash2 className="size-3.5" aria-hidden="true" />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </article>

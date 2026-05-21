@@ -49,7 +49,16 @@ export type CoachFeedback = {
   explanationZh?: string;
   pattern: string;
   severity: CoachSeverity;
+  rebuttal?: string;
+  revisedAt?: string;
   createdAt: string;
+};
+
+export type MessageEditRequest = {
+  messageId: string;
+  draft: string;
+  requestId: number;
+  feedbackId?: string;
 };
 
 export type ConversationSession = {

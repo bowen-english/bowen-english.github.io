@@ -30,6 +30,7 @@ import {
   type CoachFeedback,
   type CoachSettings,
   type ConversationSession,
+  type MessageEditRequest,
   type OpenRouterModel,
   type ScenarioPreset,
 } from "@/lib/types";
@@ -361,6 +362,11 @@ export default function Home() {
   const [speechPendingIds, setSpeechPendingIds] = useState<string[]>([]);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
+  const [messageEditRequest, setMessageEditRequest] =
+    useState<MessageEditRequest | null>(null);
+  const [rebuttingFeedbackId, setRebuttingFeedbackId] = useState<string | null>(
+    null,
+  );
   const audioUrlsRef = useRef(new Map<string, string>());
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
@@ -374,6 +380,7 @@ export default function Home() {
   const scenario = activeSession?.scenario ?? "";
   const speechEnabled = Boolean(activeSession?.speechEnabled);
   const hideAssistantText = Boolean(activeSession?.hideAssistantText);
+  const practiceFeedbackId = messageEditRequest?.feedbackId ?? null;
 
   const loadPublicModels = useCallback(async () => {
     setModelsLoading(true);
@@ -824,7 +831,7 @@ ${contextText}
       const trimmedContent = content.trim();
 
       if (!trimmedContent || chatPending || coachPending || !activeSession) {
-        return;
+        return false;
       }
 
       if (!effectiveSettings.openRouterApiKey.trim()) {
@@ -833,7 +840,7 @@ ${contextText}
         setChatError(message);
         setCoachError(message);
         setSettingsOpen(true);
-        return;
+        return false;
       }
 
       const messageIndex = activeSession.messages.findIndex(
@@ -841,7 +848,7 @@ ${contextText}
       );
 
       if (messageIndex === -1) {
-        return;
+        return false;
       }
 
       const editedMessage: ChatMessage = {
@@ -890,6 +897,7 @@ ${contextText}
 
       setChatError(null);
       setCoachError(null);
+      setMessageEditRequest(null);
       updateSession(activeSession.id, {
         messages: conversation,
         feedback: nextFeedback,
@@ -908,6 +916,7 @@ ${contextText}
         scenario,
         speechEnabled,
       );
+      return true;
     },
     [
       activeSession,
@@ -925,6 +934,201 @@ ${contextText}
     ],
   );
 
+  const handlePracticeFeedback = useCallback(
+    (feedbackId: string) => {
+      if (!activeSession || chatPending || coachPending) {
+        return;
+      }
+
+      const item = activeSession.feedback.find(
+        (feedbackItem) => feedbackItem.id === feedbackId,
+      );
+      const message = item
+        ? activeSession.messages.find(
+            (chatMessage) => chatMessage.id === item.messageId,
+          )
+        : null;
+
+      if (!item || !message || message.role !== "user") {
+        return;
+      }
+
+      setChatError(null);
+      setCoachError(null);
+      setMessageEditRequest({
+        messageId: message.id,
+        draft: message.content,
+        requestId: Date.now(),
+        feedbackId: item.id,
+      });
+    },
+    [activeSession, chatPending, coachPending],
+  );
+
+  const handleEditRequestComplete = useCallback(
+    (request: MessageEditRequest) => {
+      setMessageEditRequest((current) =>
+        current?.requestId === request.requestId ? null : current,
+      );
+    },
+    [],
+  );
+
+  const handleRebutCoachFeedback = useCallback(
+    async (feedbackId: string, rebuttal: string) => {
+      const trimmedRebuttal = rebuttal.trim();
+
+      if (!trimmedRebuttal || coachPending || !activeSession) {
+        return false;
+      }
+
+      if (!effectiveSettings.openRouterApiKey.trim()) {
+        const message = "Add your OpenRouter API key in Settings first.";
+
+        setCoachError(message);
+        setSettingsOpen(true);
+        return false;
+      }
+
+      const feedbackItem = activeSession.feedback.find(
+        (item) => item.id === feedbackId,
+      );
+      const messageIndex = feedbackItem
+        ? activeSession.messages.findIndex(
+            (message) =>
+              message.id === feedbackItem.messageId && message.role === "user",
+          )
+        : -1;
+      const latestUserMessage =
+        messageIndex >= 0 ? activeSession.messages[messageIndex] : null;
+
+      if (!feedbackItem || !latestUserMessage) {
+        return false;
+      }
+
+      setCoachPending(true);
+      setCoachError(null);
+      setRebuttingFeedbackId(feedbackId);
+
+      try {
+        const conversation = activeSession.messages.slice(0, messageIndex + 1);
+        const context = pickCoachContext({
+          messages: conversation,
+          mode: effectiveSettings.contextMode,
+          recentTurns: effectiveSettings.recentTurns,
+        });
+        const contextText = context
+          .map((message) => {
+            const speaker = message.role === "user" ? "User" : "Chat Partner";
+            return `${speaker}: ${message.content}`;
+          })
+          .join("\n\n");
+        const raw = await callOpenRouterFromBrowser({
+          apiKey: effectiveSettings.openRouterApiKey,
+          model: effectiveSettings.coachModel,
+          temperature: 0.2,
+          responseFormat: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content: buildCoachSystemPrompt(speechEnabled),
+            },
+            {
+              role: "user",
+              content: `
+The user is rebutting your previous feedback because it may have missed their intended meaning.
+Use the rebuttal to revise the advice. Do not defend the old feedback.
+If the user's original wording is already acceptable for their intended meaning, say so clearly and give a more natural option only if useful.
+
+Scenario:
+${scenario.trim() || "None"}
+
+Speech mode: ${speechEnabled ? "enabled" : "disabled"}
+Context mode: ${effectiveSettings.contextMode}
+Explanation language: ${getExplanationLanguageName(effectiveSettings.explanationLanguage)}
+Write explanation, issues, and reusable pattern in the requested explanation language.
+
+Analyze only this latest user sentence:
+${latestUserMessage.content}
+
+User rebuttal / intended meaning:
+${trimmedRebuttal}
+
+Previous feedback:
+${JSON.stringify(
+  {
+    corrected: feedbackItem.corrected,
+    natural: feedbackItem.natural,
+    issues: feedbackItem.issues,
+    explanation: feedbackItem.explanation ?? feedbackItem.explanationZh ?? "",
+    pattern: feedbackItem.pattern,
+    severity: feedbackItem.severity,
+  },
+  null,
+  2,
+)}
+
+Conversation context:
+${contextText}
+`.trim(),
+            },
+          ],
+        });
+        const result = normalizeCoachResponse(raw, latestUserMessage.id);
+        const updatedFeedback: CoachFeedback = {
+          ...result,
+          id: feedbackItem.id,
+          createdAt: feedbackItem.createdAt,
+          revisedAt: new Date().toISOString(),
+          rebuttal: trimmedRebuttal,
+        };
+
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === activeSession.id
+              ? applySessionPatch(session, {
+                  feedback: session.feedback.map((item) =>
+                    item.id === feedbackItem.id ? updatedFeedback : item,
+                  ),
+                })
+              : session,
+          ),
+        );
+        return true;
+      } catch (error) {
+        setCoachError(
+          error instanceof Error ? error.message : "Silent Coach request failed.",
+        );
+        return false;
+      } finally {
+        setCoachPending(false);
+        setRebuttingFeedbackId(null);
+      }
+    },
+    [
+      activeSession,
+      coachPending,
+      effectiveSettings.coachModel,
+      effectiveSettings.contextMode,
+      effectiveSettings.explanationLanguage,
+      effectiveSettings.openRouterApiKey,
+      effectiveSettings.recentTurns,
+      scenario,
+      setSessions,
+      speechEnabled,
+    ],
+  );
+
+  const handleSelectSession = useCallback(
+    (sessionId: string) => {
+      setCurrentSessionId(sessionId);
+      setMessageEditRequest(null);
+      setChatError(null);
+      setCoachError(null);
+    },
+    [setCurrentSessionId],
+  );
+
   const handleNewSession = useCallback(() => {
     if (
       activeSession &&
@@ -935,6 +1139,7 @@ ${contextText}
       setDraft("");
       setChatError(null);
       setCoachError(null);
+      setMessageEditRequest(null);
       return;
     }
 
@@ -945,6 +1150,7 @@ ${contextText}
     setDraft("");
     setChatError(null);
     setCoachError(null);
+    setMessageEditRequest(null);
   }, [
     activeSession,
     setCurrentSessionId,
@@ -975,6 +1181,7 @@ ${contextText}
         setDraft("");
         setChatError(null);
         setCoachError(null);
+        setMessageEditRequest(null);
       }
     },
     [
@@ -1058,18 +1265,18 @@ ${contextText}
   const hasApiKey = Boolean(effectiveSettings.openRouterApiKey.trim());
 
   return (
-    <main className="flex h-dvh min-h-[720px] flex-col overflow-hidden px-4 py-4 text-zinc-950">
+    <main className="flex h-dvh min-h-[720px] flex-col overflow-hidden px-4 py-4 text-[#26231f]">
       <header className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-4 pb-4">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white shadow-lg shadow-zinc-900/10">
+            <div className="shine-sweep flex size-11 shrink-0 items-center justify-center rounded-lg bg-[#2f3733] text-white shadow-lg shadow-stone-900/10 ring-1 ring-white/40 transition-transform duration-300 hover:-translate-y-0.5">
               <Bot className="size-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold tracking-normal text-zinc-950">
+              <h1 className="truncate text-xl font-bold tracking-normal text-[#26231f]">
                 English Shadow Coach
               </h1>
-              <p className="truncate text-sm text-zinc-500">
+              <p className="truncate text-sm text-stone-500">
                 Chat naturally. Improve quietly.
               </p>
             </div>
@@ -1077,10 +1284,10 @@ ${contextText}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
-            className={`hidden h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition sm:inline-flex ${
+            className={`hidden h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5 sm:inline-flex ${
               hasApiKey
-                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
-                : "border-amber-500/25 bg-amber-400/15 text-amber-800"
+                ? "border-[#0f6f68]/20 bg-[#eef6f3] text-[#0f6f68] shadow-stone-900/[0.03]"
+                : "border-[#9f7a31]/20 bg-[#f7efe0] text-[#7a5d22] shadow-stone-900/[0.03]"
             }`}
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -1090,7 +1297,7 @@ ${contextText}
             {hasApiKey ? "Key saved" : "Add key"}
           </button>
           <button
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-black/10 bg-white/75 px-3 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/10"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-900/10 bg-[#fffdf8]/80 px-3 text-sm font-semibold text-stone-800 shadow-sm shadow-stone-900/[0.04] backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#fffdf8] hover:shadow-md focus:outline-none focus:ring-4 focus:ring-stone-900/10"
             type="button"
             onClick={handleNewSession}
           >
@@ -1098,7 +1305,7 @@ ${contextText}
             <span className="hidden sm:inline">New Chat</span>
           </button>
           <button
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 focus:outline-none focus:ring-4 focus:ring-zinc-900/15"
+            className="shine-sweep inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#2f3733] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#252d29] hover:shadow-md focus:outline-none focus:ring-4 focus:ring-[#0f6f68]/15"
             type="button"
             onClick={() => setSettingsOpen(true)}
           >
@@ -1108,11 +1315,11 @@ ${contextText}
         </div>
       </header>
 
-      <div className="mx-auto grid min-h-0 w-full max-w-[1500px] flex-1 overflow-hidden rounded-lg border border-black/10 bg-white/35 shadow-xl shadow-zinc-900/5 backdrop-blur-xl lg:grid-cols-[280px_minmax(0,1fr)_410px]">
+      <div className="animate-soft-rise mx-auto grid min-h-0 w-full max-w-[1500px] flex-1 overflow-hidden rounded-lg border border-stone-900/10 bg-[#fffdf8]/75 shadow-xl shadow-stone-900/[0.06] backdrop-blur-2xl lg:grid-cols-[clamp(292px,20vw,320px)_minmax(0,1fr)_410px]">
         <HistoryPanel
           sessions={sessions}
           currentSessionId={activeSessionId}
-          onSelectSession={setCurrentSessionId}
+          onSelectSession={handleSelectSession}
           onRenameSession={handleRenameSession}
           onDeleteSession={handleDeleteSession}
         />
@@ -1128,12 +1335,14 @@ ${contextText}
           error={chatError ?? speechError}
           isPending={chatPending}
           canEditMessages={!chatPending && !coachPending}
+          editRequest={messageEditRequest}
           onScenarioChange={handleScenarioChange}
           onScenarioPresetsChange={setScenarioPresets}
           onSpeechEnabledChange={handleSpeechEnabledChange}
           onHideAssistantTextChange={handleHideAssistantTextChange}
           onPlayAssistantMessage={playAssistantMessageAudio}
           onEditUserMessage={handleEditUserMessage}
+          onEditRequestComplete={handleEditRequestComplete}
           onValueChange={setDraft}
           onSubmit={handleSend}
         />
@@ -1141,6 +1350,11 @@ ${contextText}
           feedback={feedback}
           error={coachError}
           isPending={coachPending}
+          practiceFeedbackId={practiceFeedbackId}
+          rebuttingFeedbackId={rebuttingFeedbackId}
+          canPractice={!chatPending && !coachPending}
+          onPracticeFeedback={handlePracticeFeedback}
+          onRebutFeedback={handleRebutCoachFeedback}
         />
       </div>
 
