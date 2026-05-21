@@ -42,6 +42,14 @@ const SETTINGS_STORAGE_KEY = "english-shadow-coach.settings";
 const SCENARIO_PRESETS_STORAGE_KEY = "english-shadow-coach.scenario-presets";
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_FEEDBACK: CoachFeedback[] = [];
+const LEGACY_DEFAULT_CHAT_MODELS = new Set([
+  "x-ai/grok-4.1-fast",
+  "x-ai/grok-4.3-fast",
+]);
+const LEGACY_DEFAULT_COACH_MODELS = new Set([
+  "google/gemini-3.1-flash-lite-preview",
+]);
+const ACCIDENTAL_TTS_DEFAULT_MODEL = "google/gemini-3.5-flash";
 
 type CoachResponse = Omit<CoachFeedback, "id" | "createdAt">;
 
@@ -156,7 +164,7 @@ function readStoredArray<T>(key: string): T[] {
 }
 
 function mergeSettings(settings: Partial<CoachSettings>): CoachSettings {
-  return {
+  const merged = {
     ...DEFAULT_SETTINGS,
     ...settings,
     openRouterApiKey: settings.openRouterApiKey ?? "",
@@ -168,6 +176,24 @@ function mergeSettings(settings: Partial<CoachSettings>): CoachSettings {
     explanationLanguage:
       settings.explanationLanguage || DEFAULT_SETTINGS.explanationLanguage,
     recentTurns: settings.recentTurns || DEFAULT_SETTINGS.recentTurns,
+  };
+
+  return migrateDefaultModelSettings(merged);
+}
+
+function migrateDefaultModelSettings(settings: CoachSettings): CoachSettings {
+  return {
+    ...settings,
+    chatModel: LEGACY_DEFAULT_CHAT_MODELS.has(settings.chatModel)
+      ? DEFAULT_SETTINGS.chatModel
+      : settings.chatModel,
+    coachModel: LEGACY_DEFAULT_COACH_MODELS.has(settings.coachModel)
+      ? DEFAULT_SETTINGS.coachModel
+      : settings.coachModel,
+    ttsModel:
+      settings.ttsModel === ACCIDENTAL_TTS_DEFAULT_MODEL
+        ? DEFAULT_SETTINGS.ttsModel
+        : settings.ttsModel,
   };
 }
 
@@ -286,10 +312,8 @@ export default function Home() {
   >(SESSIONS_STORAGE_KEY, []);
   const [currentSessionId, setCurrentSessionId, currentSessionHydrated] =
     useLocalStorageState<string | null>(CURRENT_SESSION_STORAGE_KEY, null);
-  const [settings, setSettings] = useLocalStorageState<CoachSettings>(
-    SETTINGS_STORAGE_KEY,
-    DEFAULT_SETTINGS,
-  );
+  const [settings, setSettings, settingsHydrated] =
+    useLocalStorageState<CoachSettings>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS);
   const [scenarioPresets, setScenarioPresets] = useLocalStorageState<
     ScenarioPreset[]
   >(SCENARIO_PRESETS_STORAGE_KEY, DEFAULT_SCENARIO_PRESETS);
@@ -298,6 +322,26 @@ export default function Home() {
     () => normalizeScenarioPresets(scenarioPresets),
     [scenarioPresets],
   );
+
+  useEffect(() => {
+    if (!settingsHydrated) {
+      return;
+    }
+
+    setSettings((current) => {
+      const migrated = mergeSettings(current);
+
+      if (
+        migrated.chatModel === current.chatModel &&
+        migrated.coachModel === current.coachModel &&
+        migrated.ttsModel === current.ttsModel
+      ) {
+        return current;
+      }
+
+      return migrated;
+    });
+  }, [settingsHydrated, setSettings]);
   const [draft, setDraft] = useLocalStorageState(
     "english-shadow-coach.draft",
     "",

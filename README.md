@@ -23,7 +23,7 @@ The default models are:
 
 - Chat Partner: `google/gemini-3.5-flash`
 - Silent Coach: `google/gemini-3.5-flash`
-- TTS: `google/gemini-3.5-flash`
+- TTS: `openai/gpt-4o-mini-tts-2025-12-15`
 
 The model fields are editable in the UI and saved locally.
 
