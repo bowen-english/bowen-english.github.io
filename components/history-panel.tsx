@@ -47,10 +47,10 @@ export function HistoryPanel({
   };
 
   return (
-    <aside className="flex min-h-0 flex-col border-stone-900/10 bg-[#fffdf8]/60 lg:border-r">
-      <div className="flex items-center gap-2 border-b border-stone-900/10 bg-[#fffdf8]/60 px-4 py-3 backdrop-blur">
-        <MessageSquareText className="size-4 text-[#0f6f68]" aria-hidden="true" />
-        <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[#26231f]">
+    <aside className="history-panel flex h-full min-h-0 flex-col lg:border-r">
+      <div className="panel-header history-header flex items-center gap-2 px-4 py-3.5 backdrop-blur">
+        <MessageSquareText className="size-4 text-[#aaa2ff]" aria-hidden="true" />
+        <h2 className="panel-title text-sm font-extrabold tracking-[-0.01em]">
           History
         </h2>
       </div>
@@ -69,10 +69,10 @@ export function HistoryPanel({
               return (
                 <article
                   key={session.id}
-                  className={`group animate-soft-rise relative min-h-[86px] overflow-hidden rounded-lg border px-4 py-3.5 transition-all duration-200 ${
+                  className={`history-card ${isActive ? "history-card-active" : ""} group animate-soft-rise relative min-h-[86px] overflow-hidden rounded-2xl border px-4 py-3.5 transition-all duration-200 ${
                     isActive
-                      ? "border-[#0f6f68]/20 bg-[#f1f8f5] text-[#26231f] shadow-sm shadow-stone-900/[0.04] before:absolute before:inset-y-4 before:left-0 before:w-0.5 before:rounded-r-full before:bg-[#0f6f68]"
-                      : "border-stone-900/10 bg-[#fffdf8]/80 text-stone-800 shadow-sm shadow-stone-900/[0.04] hover:-translate-y-0.5 hover:border-[#0f6f68]/20 hover:bg-[#fffdf8] hover:shadow-md"
+                      ? "border-[#6558f5]/20 bg-[#f1f8f5] text-[#201d35] shadow-sm shadow-stone-900/[0.04] before:absolute before:inset-y-4 before:left-0 before:w-0.5 before:rounded-r-full before:bg-[#6558f5]"
+                      : "border-stone-900/10 bg-[#fffdf8]/80 text-stone-800 shadow-sm shadow-stone-900/[0.04] hover:-translate-y-0.5 hover:border-[#6558f5]/20 hover:bg-[#fffdf8] hover:shadow-md"
                   }`}
                 >
                   {isEditing ? (
@@ -81,13 +81,13 @@ export function HistoryPanel({
                       onSubmit={(event) => submitRename(event, session)}
                     >
                       <input
-                        className="h-9 min-w-0 flex-1 rounded-lg border border-stone-900/10 bg-[#fffdf8] px-2 text-sm font-semibold text-[#26231f] outline-none transition focus:border-[#0f6f68]/45 focus:ring-4 focus:ring-[#0f6f68]/10"
+                        className="h-9 min-w-0 flex-1 rounded-lg border border-stone-900/10 bg-[#fffdf8] px-2 text-sm font-semibold text-[#201d35] outline-none transition focus:border-[#6558f5]/45 focus:ring-4 focus:ring-[#6558f5]/10"
                         value={draftTitle}
                         autoFocus
                         onChange={(event) => setDraftTitle(event.target.value)}
                       />
                       <button
-                        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#0f6f68] text-white shadow-sm shadow-[#0f6f68]/15 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0b5f59]"
+                        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#6558f5] text-white shadow-sm shadow-[#6558f5]/15 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5145d9]"
                         type="submit"
                         title="Save name"
                       >
@@ -122,11 +122,11 @@ export function HistoryPanel({
                           {session.feedback.length} notes
                         </span>
                       </button>
-                      <div className="absolute right-0 top-0 flex translate-y-0.5 gap-1 opacity-0 transition-all duration-200 group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100">
+                      <div className="absolute right-0 top-0 flex translate-y-0 gap-1 opacity-100 transition-all duration-200 lg:translate-y-0.5 lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:translate-y-0 lg:group-hover:opacity-100">
                         <button
                           className={`flex size-8 shrink-0 items-center justify-center rounded-lg transition ${
                             isActive
-                              ? "text-stone-500 hover:bg-white/65 hover:text-[#26231f]"
+                              ? "text-stone-500 hover:bg-white/65 hover:text-[#201d35]"
                               : "text-stone-400 hover:bg-stone-100 hover:text-stone-900"
                           }`}
                           type="button"
@@ -138,7 +138,7 @@ export function HistoryPanel({
                         <button
                           className={`flex size-8 shrink-0 items-center justify-center rounded-lg transition ${
                             isActive
-                              ? "text-stone-500 hover:bg-white/65 hover:text-[#26231f]"
+                              ? "text-stone-500 hover:bg-white/65 hover:text-[#201d35]"
                               : "text-stone-400 hover:bg-rose-50 hover:text-rose-700"
                           }`}
                           type="button"

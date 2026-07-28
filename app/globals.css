@@ -2,16 +2,21 @@
 
 :root {
   color-scheme: light;
-  --background: #f7f5f1;
-  --foreground: #26231f;
-  --surface: rgba(255, 253, 248, 0.78);
-  --surface-strong: rgba(255, 253, 248, 0.94);
-  --border-soft: rgba(41, 37, 31, 0.10);
-  --ink: #2f3733;
-  --muted: #78716c;
-  --teal: #0f6f68;
-  --clay: #7b6a5e;
-  --gold: #9f7a31;
+  --background: #eeedf7;
+  --foreground: #201d35;
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-strong: rgba(255, 255, 255, 0.94);
+  --border-soft: rgba(43, 38, 75, 0.10);
+  --ink: #201d35;
+  --muted: #7f7a95;
+  --violet: #6558f5;
+  --violet-deep: #5145d9;
+  --violet-soft: #eeecff;
+  --mint: #38bda5;
+  --coral: #ff8e72;
+  --midnight: #171529;
+  --midnight-soft: #24203f;
+  --font-sans: "Avenir Next", Avenir, "Segoe UI", Inter, system-ui, sans-serif;
 }
 
 * {
@@ -27,10 +32,14 @@ body {
 body {
   margin: 0;
   background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.96) 0%, rgba(247, 245, 241, 0.98) 100%),
-    #f7f5f1;
+    radial-gradient(circle at 12% 8%, rgba(135, 121, 255, 0.17), transparent 31rem),
+    radial-gradient(circle at 88% 4%, rgba(255, 151, 124, 0.15), transparent 30rem),
+    radial-gradient(circle at 78% 96%, rgba(56, 189, 165, 0.12), transparent 32rem),
+    linear-gradient(145deg, #f8f7fc 0%, #efedf8 48%, #f6f4f8 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "kern", "liga", "calt";
+  letter-spacing: -0.008em;
   text-rendering: geometricPrecision;
 }
 
@@ -42,7 +51,7 @@ select {
 }
 
 ::selection {
-  background: rgba(15, 111, 104, 0.18);
+  background: rgba(101, 88, 245, 0.2);
 }
 
 ::-webkit-scrollbar {
@@ -55,14 +64,14 @@ select {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(38, 35, 31, 0.14);
+  background: rgba(60, 54, 96, 0.18);
   border: 4px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(38, 35, 31, 0.24);
+  background: rgba(60, 54, 96, 0.3);
   border: 3px solid transparent;
   background-clip: padding-box;
 }
@@ -161,6 +170,367 @@ select {
 
 .shine-sweep:hover::after {
   transform: translateX(120%);
+}
+
+.app-root {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-root::before,
+.app-root::after {
+  position: fixed;
+  z-index: -1;
+  border-radius: 999px;
+  content: "";
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.app-root::before {
+  top: -8rem;
+  left: -7rem;
+  width: 22rem;
+  height: 22rem;
+  border: 1px solid rgba(101, 88, 245, 0.16);
+  box-shadow:
+    0 0 0 3.5rem rgba(101, 88, 245, 0.025),
+    0 0 0 7rem rgba(101, 88, 245, 0.018);
+}
+
+.app-root::after {
+  right: -8rem;
+  bottom: -9rem;
+  width: 25rem;
+  height: 25rem;
+  border: 1px solid rgba(255, 142, 114, 0.14);
+  box-shadow:
+    0 0 0 4rem rgba(255, 142, 114, 0.022),
+    0 0 0 8rem rgba(255, 142, 114, 0.014);
+}
+
+.desktop-header {
+  min-height: 66px;
+}
+
+.brand-mark {
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.36), transparent 30%),
+    linear-gradient(145deg, #7569ff 0%, #5a4de5 62%, #4034b9 100%);
+  box-shadow:
+    0 10px 26px rgba(81, 69, 217, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.brand-title {
+  text-wrap: balance;
+}
+
+.app-shell {
+  border: 1px solid rgba(52, 46, 88, 0.11);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow:
+    0 32px 80px rgba(43, 36, 80, 0.14),
+    0 8px 24px rgba(43, 36, 80, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.panel-header {
+  min-height: 70px;
+  border-bottom: 1px solid rgba(48, 42, 82, 0.09);
+}
+
+.panel-title {
+  font-size: 0.93rem;
+  letter-spacing: -0.012em;
+}
+
+.history-panel {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(117, 105, 255, 0.22), transparent 18rem),
+    linear-gradient(165deg, var(--midnight) 0%, var(--midnight-soft) 100%) !important;
+  color: #f7f5ff;
+}
+
+.history-header {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.025) !important;
+}
+
+.history-header h2 {
+  color: #f7f5ff !important;
+}
+
+.history-panel > div:last-child {
+  padding: 18px;
+}
+
+.history-card {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  color: rgba(250, 249, 255, 0.88) !important;
+  box-shadow: none !important;
+}
+
+.history-card:hover {
+  border-color: rgba(170, 162, 255, 0.32) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 14px 34px rgba(7, 5, 18, 0.18) !important;
+}
+
+.history-card-active {
+  border-color: rgba(170, 162, 255, 0.3) !important;
+  background:
+    linear-gradient(135deg, rgba(122, 109, 255, 0.2), rgba(255, 255, 255, 0.075)) !important;
+  box-shadow: 0 14px 34px rgba(7, 5, 18, 0.18) !important;
+}
+
+.history-card span.text-stone-400,
+.history-card span.text-stone-500 {
+  color: rgba(232, 228, 249, 0.47) !important;
+}
+
+.history-card button[title="Rename conversation"],
+.history-card button[title="Delete conversation"] {
+  color: rgba(235, 231, 250, 0.48) !important;
+}
+
+.history-panel > div:last-child > p {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  color: rgba(235, 231, 250, 0.56) !important;
+}
+
+.history-card::before {
+  width: 3px !important;
+  background: linear-gradient(180deg, #b0a9ff, #6c5ff7) !important;
+  box-shadow: 0 0 16px rgba(170, 162, 255, 0.72);
+}
+
+.chat-panel {
+  border-color: rgba(48, 42, 82, 0.08) !important;
+  background: rgba(255, 255, 255, 0.78) !important;
+}
+
+.chat-panel-header {
+  background: rgba(255, 255, 255, 0.74) !important;
+}
+
+.chat-stream {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(117, 105, 255, 0.045), transparent 24rem),
+    linear-gradient(180deg, rgba(252, 251, 255, 0.82), rgba(248, 247, 252, 0.7));
+}
+
+.empty-state-mark {
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 20px;
+  background: linear-gradient(145deg, #7468ff, #5145d9);
+  box-shadow:
+    0 18px 34px rgba(81, 69, 217, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transform: rotate(-3deg);
+}
+
+.assistant-avatar,
+.user-avatar {
+  border-radius: 12px;
+  box-shadow: 0 7px 18px rgba(42, 35, 79, 0.12);
+}
+
+.assistant-avatar {
+  background: linear-gradient(145deg, #7569ff, #584be1) !important;
+}
+
+.user-avatar {
+  background: linear-gradient(145deg, #ff9b7f, #ed7458) !important;
+}
+
+.message-bubble {
+  border-radius: 18px !important;
+}
+
+.assistant-bubble {
+  border: 1px solid rgba(53, 47, 90, 0.09) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #343047 !important;
+  box-shadow: 0 8px 22px rgba(44, 37, 78, 0.055) !important;
+}
+
+.assistant-bubble:hover {
+  background: #fff !important;
+  box-shadow: 0 14px 28px rgba(44, 37, 78, 0.09) !important;
+}
+
+.user-bubble {
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  background:
+    radial-gradient(circle at 85% 0%, rgba(255, 255, 255, 0.17), transparent 8rem),
+    linear-gradient(145deg, #6d60f5 0%, #574bd8 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 12px 28px rgba(81, 69, 217, 0.19) !important;
+}
+
+.chat-composer {
+  border-top: 1px solid rgba(48, 42, 82, 0.08);
+  background: rgba(251, 250, 255, 0.86) !important;
+}
+
+.composer-shell {
+  border: 1px solid rgba(53, 47, 90, 0.11);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 8px 28px rgba(44, 37, 78, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.composer-shell:focus-within {
+  border-color: rgba(101, 88, 245, 0.38);
+  box-shadow:
+    0 12px 34px rgba(81, 69, 217, 0.12),
+    0 0 0 4px rgba(101, 88, 245, 0.09);
+}
+
+.primary-icon-button {
+  border-radius: 14px;
+  background: linear-gradient(145deg, #7468ff, #5548d9) !important;
+  box-shadow: 0 10px 22px rgba(81, 69, 217, 0.24);
+}
+
+.primary-icon-button:hover {
+  box-shadow: 0 14px 28px rgba(81, 69, 217, 0.3);
+}
+
+.coach-panel {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 142, 114, 0.08), transparent 17rem),
+    linear-gradient(180deg, rgba(248, 247, 255, 0.94), rgba(244, 243, 251, 0.9)) !important;
+}
+
+.coach-header {
+  background: rgba(249, 248, 255, 0.72) !important;
+}
+
+.feedback-card {
+  border: 1px solid rgba(57, 50, 97, 0.09) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  box-shadow: 0 9px 24px rgba(44, 37, 78, 0.055) !important;
+}
+
+.feedback-card:hover {
+  background: #fff !important;
+  box-shadow: 0 16px 34px rgba(44, 37, 78, 0.095) !important;
+}
+
+.feedback-card h3 {
+  color: #8b86a0 !important;
+}
+
+.feedback-card ul li {
+  position: relative;
+  padding-left: 1rem;
+}
+
+.feedback-card ul li::before {
+  position: absolute;
+  top: 0.63rem;
+  left: 0;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #7569ff, #ff8e72);
+  content: "";
+}
+
+.feedback-card button,
+.scenario-popover button,
+.settings-sheet button {
+  border-radius: 12px;
+}
+
+.scenario-popover {
+  border: 1px solid rgba(53, 47, 90, 0.1);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow:
+    0 28px 70px rgba(32, 27, 63, 0.2),
+    0 8px 20px rgba(32, 27, 63, 0.08);
+}
+
+.settings-backdrop {
+  background: rgba(24, 21, 43, 0.48) !important;
+}
+
+.settings-sheet {
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(117, 105, 255, 0.11), transparent 28rem),
+    #f8f7fc;
+  box-shadow: 0 36px 100px rgba(18, 14, 43, 0.32);
+}
+
+.settings-header {
+  border-bottom: 1px solid rgba(48, 42, 82, 0.09);
+  background: rgba(255, 255, 255, 0.7) !important;
+}
+
+.settings-card {
+  border: 1px solid rgba(53, 47, 90, 0.09) !important;
+  background: rgba(255, 255, 255, 0.78) !important;
+  box-shadow: 0 8px 24px rgba(44, 37, 78, 0.045);
+}
+
+.settings-sheet input,
+.settings-sheet select,
+.settings-sheet textarea,
+.scenario-popover input,
+.scenario-popover select,
+.scenario-popover textarea {
+  border-color: rgba(53, 47, 90, 0.11) !important;
+  border-radius: 12px !important;
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.settings-sheet input:focus,
+.settings-sheet select:focus,
+.settings-sheet textarea:focus,
+.scenario-popover input:focus,
+.scenario-popover select:focus,
+.scenario-popover textarea:focus {
+  border-color: rgba(101, 88, 245, 0.42) !important;
+  box-shadow: 0 0 0 4px rgba(101, 88, 245, 0.09) !important;
+}
+
+.mobile-header,
+.mobile-dock {
+  border-color: rgba(48, 42, 82, 0.1);
+  background: rgba(250, 249, 254, 0.88) !important;
+  box-shadow: 0 8px 30px rgba(40, 34, 73, 0.08);
+}
+
+.mobile-header {
+  border-bottom: 1px solid rgba(48, 42, 82, 0.09);
+}
+
+.mobile-dock {
+  border-top: 1px solid rgba(48, 42, 82, 0.09);
+}
+
+.mobile-tab[aria-pressed="true"] {
+  background: linear-gradient(145deg, #eeecff, #e5e2ff) !important;
+  color: #5b4ee1 !important;
+  box-shadow: inset 0 0 0 1px rgba(101, 88, 245, 0.1);
+}
+
+@media (min-width: 1024px) {
+  .app-shell {
+    max-height: calc(100dvh - 98px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

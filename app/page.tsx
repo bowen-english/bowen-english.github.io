@@ -1,7 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, KeyRound, Plus, Settings } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  AudioLines,
+  Bot,
+  KeyRound,
+  MessageSquareText,
+  Plus,
+  Settings,
+  WandSparkles,
+} from "lucide-react";
 import { ChatPanel } from "@/components/chat-panel";
 import { CoachPanel } from "@/components/coach-panel";
 import { HistoryPanel } from "@/components/history-panel";
@@ -45,15 +60,36 @@ const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_FEEDBACK: CoachFeedback[] = [];
 const LEGACY_DEFAULT_CHAT_MODELS = new Set([
   "x-ai/grok-4.1-fast",
+  "x-ai/grok-4.3",
   "x-ai/grok-4.3-fast",
   "google/gemini-3.5-flash",
 ]);
 const LEGACY_DEFAULT_COACH_MODELS = new Set([
   "google/gemini-3.1-flash-lite-preview",
+  "google/gemini-3.5-flash",
 ]);
-const ACCIDENTAL_TTS_DEFAULT_MODEL = "google/gemini-3.5-flash";
+const LEGACY_DEFAULT_TTS_MODELS = new Set([
+  "google/gemini-3.5-flash",
+  "openai/gpt-4o-mini-tts-2025-12-15",
+]);
+const LEGACY_DEFAULT_TTS_VOICES = new Set([
+  "alloy",
+  "ash",
+  "ballad",
+  "cedar",
+  "coral",
+  "echo",
+  "fable",
+  "marin",
+  "nova",
+  "onyx",
+  "sage",
+  "shimmer",
+  "verse",
+]);
 
 type CoachResponse = Omit<CoachFeedback, "id" | "createdAt">;
+type MobileView = "chat" | "coach" | "history";
 
 function makeId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -184,6 +220,8 @@ function mergeSettings(settings: Partial<CoachSettings>): CoachSettings {
 }
 
 function migrateDefaultModelSettings(settings: CoachSettings): CoachSettings {
+  const migrateTts = LEGACY_DEFAULT_TTS_MODELS.has(settings.ttsModel);
+
   return {
     ...settings,
     chatModel: LEGACY_DEFAULT_CHAT_MODELS.has(settings.chatModel)
@@ -192,10 +230,11 @@ function migrateDefaultModelSettings(settings: CoachSettings): CoachSettings {
     coachModel: LEGACY_DEFAULT_COACH_MODELS.has(settings.coachModel)
       ? DEFAULT_SETTINGS.coachModel
       : settings.coachModel,
-    ttsModel:
-      settings.ttsModel === ACCIDENTAL_TTS_DEFAULT_MODEL
-        ? DEFAULT_SETTINGS.ttsModel
-        : settings.ttsModel,
+    ttsModel: migrateTts ? DEFAULT_SETTINGS.ttsModel : settings.ttsModel,
+    ttsVoice:
+      migrateTts && LEGACY_DEFAULT_TTS_VOICES.has(settings.ttsVoice)
+        ? DEFAULT_SETTINGS.ttsVoice
+        : settings.ttsVoice,
   };
 }
 
@@ -359,6 +398,7 @@ export default function Home() {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<MobileView>("chat");
   const [speechPendingIds, setSpeechPendingIds] = useState<string[]>([]);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
@@ -955,6 +995,7 @@ ${contextText}
 
       setChatError(null);
       setCoachError(null);
+      setMobileView("chat");
       setMessageEditRequest({
         messageId: message.id,
         draft: message.content,
@@ -1125,6 +1166,7 @@ ${contextText}
       setMessageEditRequest(null);
       setChatError(null);
       setCoachError(null);
+      setMobileView("chat");
     },
     [setCurrentSessionId],
   );
@@ -1140,6 +1182,7 @@ ${contextText}
       setChatError(null);
       setCoachError(null);
       setMessageEditRequest(null);
+      setMobileView("chat");
       return;
     }
 
@@ -1151,6 +1194,7 @@ ${contextText}
     setChatError(null);
     setCoachError(null);
     setMessageEditRequest(null);
+    setMobileView("chat");
   }, [
     activeSession,
     setCurrentSessionId,
@@ -1263,20 +1307,26 @@ ${contextText}
   );
 
   const hasApiKey = Boolean(effectiveSettings.openRouterApiKey.trim());
+  const mobileSubtitle =
+    mobileView === "chat"
+      ? scenario.trim() || "Natural English conversation"
+      : mobileView === "coach"
+        ? `${feedback.length} feedback ${feedback.length === 1 ? "note" : "notes"}`
+        : `${sessions.length} saved ${sessions.length === 1 ? "conversation" : "conversations"}`;
 
   return (
-    <main className="flex h-dvh min-h-[720px] flex-col overflow-hidden px-4 py-4 text-[#26231f]">
-      <header className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-4 pb-4">
+    <main className="app-root flex h-dvh min-h-0 flex-col overflow-hidden px-0 py-0 text-[#201d35] lg:min-h-[720px] lg:px-5 lg:py-4">
+      <header className="desktop-header mx-auto hidden w-full max-w-[1540px] items-center justify-between gap-4 pb-4 lg:flex">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="shine-sweep flex size-11 shrink-0 items-center justify-center rounded-lg bg-[#2f3733] text-white shadow-lg shadow-stone-900/10 ring-1 ring-white/40 transition-transform duration-300 hover:-translate-y-0.5">
-              <Bot className="size-5" aria-hidden="true" />
+            <div className="brand-mark shine-sweep flex size-11 shrink-0 items-center justify-center text-white transition-transform duration-300 hover:-translate-y-0.5">
+              <AudioLines className="size-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold tracking-normal text-[#26231f]">
+              <h1 className="brand-title truncate text-xl font-extrabold tracking-[-0.025em] text-[#201d35]">
                 English Shadow Coach
               </h1>
-              <p className="truncate text-sm text-stone-500">
+              <p className="truncate text-sm font-medium text-[#77728f]">
                 Chat naturally. Improve quietly.
               </p>
             </div>
@@ -1286,7 +1336,7 @@ ${contextText}
           <button
             className={`hidden h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5 sm:inline-flex ${
               hasApiKey
-                ? "border-[#0f6f68]/20 bg-[#eef6f3] text-[#0f6f68] shadow-stone-900/[0.03]"
+                ? "border-[#6558f5]/20 bg-[#eeecff] text-[#6558f5] shadow-stone-900/[0.03]"
                 : "border-[#9f7a31]/20 bg-[#f7efe0] text-[#7a5d22] shadow-stone-900/[0.03]"
             }`}
             type="button"
@@ -1305,7 +1355,7 @@ ${contextText}
             <span className="hidden sm:inline">New Chat</span>
           </button>
           <button
-            className="shine-sweep inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#2f3733] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#252d29] hover:shadow-md focus:outline-none focus:ring-4 focus:ring-[#0f6f68]/15"
+            className="shine-sweep inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#201d35] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#171529] hover:shadow-md focus:outline-none focus:ring-4 focus:ring-[#6558f5]/15"
             type="button"
             onClick={() => setSettingsOpen(true)}
           >
@@ -1315,7 +1365,53 @@ ${contextText}
         </div>
       </header>
 
-      <div className="animate-soft-rise mx-auto grid min-h-0 w-full max-w-[1500px] flex-1 overflow-hidden rounded-lg border border-stone-900/10 bg-[#fffdf8]/75 shadow-xl shadow-stone-900/[0.06] backdrop-blur-2xl lg:grid-cols-[clamp(292px,20vw,320px)_minmax(0,1fr)_410px]">
+      <header className="mobile-header flex shrink-0 items-center justify-between gap-3 px-3 py-2.5 backdrop-blur-xl lg:hidden">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="brand-mark shine-sweep flex size-9 shrink-0 items-center justify-center text-white">
+            <AudioLines className="size-4" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-sm font-bold tracking-normal text-[#201d35]">
+              English Shadow Coach
+            </h1>
+            <p className="mt-0.5 truncate text-xs text-stone-500">
+              {mobileSubtitle}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            className={`flex size-9 items-center justify-center rounded-lg border shadow-sm transition active:scale-95 ${
+              hasApiKey
+                ? "border-[#6558f5]/20 bg-[#eeecff] text-[#6558f5]"
+                : "border-[#9f7a31]/20 bg-[#f7efe0] text-[#7a5d22]"
+            }`}
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            title={hasApiKey ? "Key saved" : "Add key"}
+          >
+            <KeyRound className="size-4" aria-hidden="true" />
+          </button>
+          <button
+            className="flex size-9 items-center justify-center rounded-lg border border-stone-900/10 bg-[#fffdf8]/80 text-stone-700 shadow-sm transition active:scale-95"
+            type="button"
+            onClick={handleNewSession}
+            title="New chat"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+          </button>
+          <button
+            className="flex size-9 items-center justify-center rounded-lg bg-[#201d35] text-white shadow-sm shadow-stone-900/10 transition active:scale-95"
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+          >
+            <Settings className="size-4" aria-hidden="true" />
+          </button>
+        </div>
+      </header>
+
+      <div className="app-shell animate-soft-rise mx-auto hidden min-h-0 w-full max-w-[1540px] flex-1 overflow-hidden backdrop-blur-2xl lg:grid lg:grid-cols-[clamp(276px,19vw,308px)_minmax(0,1fr)_minmax(350px,398px)]">
         <HistoryPanel
           sessions={sessions}
           currentSessionId={activeSessionId}
@@ -1358,6 +1454,80 @@ ${contextText}
         />
       </div>
 
+      <div className="mobile-workspace flex min-h-0 flex-1 flex-col lg:hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {mobileView === "history" ? (
+            <HistoryPanel
+              sessions={sessions}
+              currentSessionId={activeSessionId}
+              onSelectSession={handleSelectSession}
+              onRenameSession={handleRenameSession}
+              onDeleteSession={handleDeleteSession}
+            />
+          ) : null}
+          {mobileView === "chat" ? (
+            <ChatPanel
+              messages={messages}
+              scenario={scenario}
+              scenarioPresets={effectiveScenarioPresets}
+              speechEnabled={speechEnabled}
+              hideAssistantText={hideAssistantText}
+              speechPendingIds={speechPendingIds}
+              playingMessageId={playingMessageId}
+              value={draft}
+              error={chatError ?? speechError}
+              isPending={chatPending}
+              canEditMessages={!chatPending && !coachPending}
+              editRequest={messageEditRequest}
+              onScenarioChange={handleScenarioChange}
+              onScenarioPresetsChange={setScenarioPresets}
+              onSpeechEnabledChange={handleSpeechEnabledChange}
+              onHideAssistantTextChange={handleHideAssistantTextChange}
+              onPlayAssistantMessage={playAssistantMessageAudio}
+              onEditUserMessage={handleEditUserMessage}
+              onEditRequestComplete={handleEditRequestComplete}
+              onValueChange={setDraft}
+              onSubmit={handleSend}
+            />
+          ) : null}
+          {mobileView === "coach" ? (
+            <CoachPanel
+              feedback={feedback}
+              error={coachError}
+              isPending={coachPending}
+              practiceFeedbackId={practiceFeedbackId}
+              rebuttingFeedbackId={rebuttingFeedbackId}
+              canPractice={!chatPending && !coachPending}
+              onPracticeFeedback={handlePracticeFeedback}
+              onRebutFeedback={handleRebutCoachFeedback}
+            />
+          ) : null}
+        </div>
+
+        <nav className="mobile-dock grid shrink-0 grid-cols-3 gap-1 px-2 pb-[calc(env(safe-area-inset-bottom)+0.55rem)] pt-2 backdrop-blur-xl">
+          <MobileTabButton
+            active={mobileView === "chat"}
+            icon={<Bot className="size-4" aria-hidden="true" />}
+            label="Chat"
+            onClick={() => setMobileView("chat")}
+          />
+          <MobileTabButton
+            active={mobileView === "coach"}
+            badge={coachPending ? "..." : feedback.length || undefined}
+            icon={<WandSparkles className="size-4" aria-hidden="true" />}
+            label="Coach"
+            onClick={() => setMobileView("coach")}
+          />
+          <MobileTabButton
+            active={mobileView === "history"}
+            badge={sessions.length || undefined}
+            icon={<MessageSquareText className="size-4" aria-hidden="true" />}
+            label="History"
+            onClick={() => setMobileView("history")}
+          />
+        </nav>
+      </div>
+
       <SettingsPanel
         open={settingsOpen}
         settings={effectiveSettings}
@@ -1370,5 +1540,49 @@ ${contextText}
         onClose={() => setSettingsOpen(false)}
       />
     </main>
+  );
+}
+
+function MobileTabButton({
+  active,
+  badge,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  badge?: number | string;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  const normalizedBadge =
+    typeof badge === "number" && badge > 99 ? "99+" : badge;
+
+  return (
+    <button
+      className={`mobile-tab relative flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-semibold transition active:scale-[0.98] ${
+        active
+          ? "bg-[#eeecff] text-[#6558f5] shadow-sm shadow-stone-900/[0.03]"
+          : "text-stone-500 hover:bg-stone-100/70 hover:text-[#201d35]"
+      }`}
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+    >
+      {icon}
+      <span>{label}</span>
+      {normalizedBadge ? (
+        <span
+          className={`absolute right-3 top-1.5 min-w-4 rounded-full px-1 text-[10px] leading-4 ${
+            active
+              ? "bg-[#6558f5] text-white"
+              : "bg-stone-200 text-stone-600"
+          }`}
+        >
+          {normalizedBadge}
+        </span>
+      ) : null}
+    </button>
   );
 }

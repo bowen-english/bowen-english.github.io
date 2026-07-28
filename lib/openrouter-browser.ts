@@ -20,6 +20,13 @@ type RawOpenRouterModel = {
   supported_parameters?: string[];
 };
 
+const GPT_5_6_BASE_MODELS = new Set([
+  "openai/gpt-5.6-sol",
+  "openai/gpt-5.6-terra",
+  "openai/gpt-5.6-luna",
+]);
+const GEMINI_TTS_MODEL = "google/gemini-3.1-flash-tts-preview";
+
 function getErrorMessage(data: unknown, fallback: string) {
   if (
     typeof data === "object" &&
@@ -79,6 +86,8 @@ export async function callOpenRouterFromBrowser({
     throw new Error("Model name is not configured.");
   }
 
+  const normalizedModel = model.trim();
+  const isGpt56BaseModel = GPT_5_6_BASE_MODELS.has(normalizedModel);
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -88,9 +97,13 @@ export async function callOpenRouterFromBrowser({
       "X-Title": "English Shadow Coach",
     },
     body: JSON.stringify({
-      model,
+      model: normalizedModel,
       messages,
-      temperature,
+      ...(isGpt56BaseModel
+        ? { reasoning: { effort: "none" } }
+        : temperature !== undefined
+          ? { temperature }
+          : {}),
       ...(responseFormat ? { response_format: responseFormat } : {}),
     }),
   });
@@ -147,6 +160,15 @@ export async function callOpenRouterSpeechFromBrowser({
     throw new Error("There is no text to speak.");
   }
 
+  const normalizedModel = model.trim();
+  const isGeminiTts = normalizedModel === GEMINI_TTS_MODEL;
+  const speechInput =
+    isGeminiTts && instructions
+      ? `${instructions}
+
+Read exactly the following text without adding or omitting words:
+${input}`
+      : input;
   const response = await fetch("https://openrouter.ai/api/v1/audio/speech", {
     method: "POST",
     headers: {
@@ -156,11 +178,11 @@ export async function callOpenRouterSpeechFromBrowser({
       "X-Title": "English Shadow Coach",
     },
     body: JSON.stringify({
-      model,
-      input,
+      model: normalizedModel,
+      input: speechInput,
       voice,
       response_format: "mp3",
-      ...(instructions
+      ...(instructions && !isGeminiTts
         ? {
             provider: {
               options: {

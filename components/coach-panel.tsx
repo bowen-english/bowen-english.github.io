@@ -23,7 +23,7 @@ type CoachPanelProps = {
 };
 
 const severityStyles: Record<CoachSeverity, string> = {
-  none: "border-[#0f6f68]/15 bg-[#eef6f3] text-[#0f6f68]",
+  none: "border-[#6558f5]/15 bg-[#eeecff] text-[#6558f5]",
   minor: "border-stone-900/10 bg-stone-50 text-stone-700",
   major: "border-rose-900/10 bg-rose-50 text-rose-800",
 };
@@ -75,18 +75,20 @@ export function CoachPanel({
   };
 
   return (
-    <section className="flex min-h-0 flex-col bg-[#fffdf8]/38">
-      <div className="flex items-center justify-between border-b border-stone-900/10 bg-[#fffdf8]/60 px-4 py-3 backdrop-blur">
-        <div>
-          <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[#26231f]">
+    <section className="coach-panel flex h-full min-h-0 flex-col">
+      <div className="panel-header coach-header flex items-center justify-between gap-3 px-3 py-2.5 backdrop-blur sm:px-4 sm:py-3.5">
+        <div className="min-w-0">
+          <h2 className="panel-title text-sm font-extrabold tracking-[-0.01em] text-[#201d35]">
             Silent Coach
           </h2>
-          <p className="mt-1 text-sm text-stone-500">Private language feedback</p>
+          <p className="mt-1 truncate text-sm text-stone-500">
+            Private language feedback
+          </p>
         </div>
         {isPending ? (
-          <div className="animate-gentle-pop inline-flex items-center gap-2 rounded-full border border-[#0f6f68]/15 bg-[#eef6f3] px-3 py-1 text-xs font-semibold text-[#0f6f68] shadow-sm shadow-stone-900/[0.03]">
+          <div className="animate-gentle-pop inline-flex items-center gap-2 rounded-full border border-[#6558f5]/15 bg-[#eeecff] px-3 py-1 text-xs font-semibold text-[#6558f5] shadow-sm shadow-stone-900/[0.03]">
             <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-            reviewing
+            <span className="hidden sm:inline">reviewing</span>
           </div>
         ) : null}
       </div>
@@ -97,14 +99,14 @@ export function CoachPanel({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4 sm:py-5">
         {feedback.length === 0 ? (
           <div className="flex h-full min-h-[280px] items-center justify-center">
             <div className="animate-soft-rise max-w-sm text-center">
-              <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-lg border border-stone-900/10 bg-[#fffdf8]/75 text-[#0f6f68] shadow-sm shadow-stone-900/[0.04]">
+              <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-lg border border-stone-900/10 bg-[#fffdf8]/75 text-[#6558f5] shadow-sm shadow-stone-900/[0.04]">
                 <WandSparkles className="size-5" aria-hidden="true" />
               </div>
-              <p className="text-2xl font-semibold tracking-normal text-[#26231f]">
+              <p className="text-xl font-semibold tracking-normal text-[#201d35] sm:text-2xl">
                 Feedback will appear here.
               </p>
               <p className="mt-2 text-sm leading-6 text-stone-500">
@@ -122,7 +124,7 @@ export function CoachPanel({
               return (
                 <article
                   key={item.id}
-                  className="animate-soft-rise rounded-lg border border-stone-900/10 bg-[#fffdf8]/85 p-4 shadow-sm shadow-stone-900/[0.04] backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#fffdf8]/95 hover:shadow-md"
+                  className="feedback-card animate-soft-rise rounded-2xl p-3.5 backdrop-blur transition-all duration-200 hover:-translate-y-0.5 sm:p-4"
                 >
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <span
@@ -133,7 +135,7 @@ export function CoachPanel({
                     </span>
                     <div className="flex shrink-0 items-center gap-2">
                       {item.revisedAt ? (
-                        <span className="rounded-full border border-[#0f6f68]/15 bg-[#eef6f3] px-2 py-0.5 text-xs font-semibold text-[#0f6f68]">
+                        <span className="rounded-full border border-[#6558f5]/15 bg-[#eeecff] px-2 py-0.5 text-xs font-semibold text-[#6558f5]">
                           revised
                         </span>
                       ) : null}
@@ -150,7 +152,7 @@ export function CoachPanel({
 
                   <FeedbackBlock label="Original" value={item.original} />
                   {isPracticing ? (
-                    <div className="mt-4 rounded-lg border border-[#0f6f68]/15 bg-[#eef6f3] px-3 py-2 text-sm font-semibold text-[#26443f] shadow-sm shadow-stone-900/[0.03]">
+                    <div className="mt-4 rounded-lg border border-[#6558f5]/15 bg-[#eeecff] px-3 py-2 text-sm font-semibold text-[#26443f] shadow-sm shadow-stone-900/[0.03]">
                       Editing the highlighted chat message. Save there to rerun
                       Chat + Coach.
                     </div>
@@ -208,7 +210,7 @@ export function CoachPanel({
                   {!isPracticing && !isRebuttalOpen ? (
                     <div className="mt-4 flex flex-wrap gap-2 border-t border-stone-900/10 pt-3">
                       <button
-                        className="h-9 rounded-lg bg-[#2f3733] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#252d29] disabled:cursor-not-allowed disabled:opacity-45"
+                        className="h-10 flex-1 rounded-lg bg-[#201d35] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#171529] disabled:cursor-not-allowed disabled:opacity-45 sm:h-9 sm:flex-none"
                         type="button"
                         onClick={() => startPractice(item)}
                         disabled={!canPractice}
@@ -216,7 +218,7 @@ export function CoachPanel({
                         Try again
                       </button>
                       <button
-                        className="h-9 rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm font-semibold text-stone-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="h-10 flex-1 rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm font-semibold text-stone-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 sm:h-9 sm:flex-none"
                         type="button"
                         onClick={() => startRebuttal(item)}
                         disabled={isPending}
@@ -228,12 +230,12 @@ export function CoachPanel({
 
                   {isRebuttalOpen ? (
                     <form
-                      className="mt-4 rounded-lg border border-[#0f6f68]/20 bg-[#eef6f3]/70 p-3"
+                      className="mt-4 rounded-lg border border-[#6558f5]/20 bg-[#eeecff]/70 p-3"
                       onSubmit={(event) => submitRebuttal(event, item.id)}
                     >
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-[#26231f]">
+                          <p className="text-sm font-semibold text-[#201d35]">
                             跟 Coach 解释你的真实意思
                           </p>
                           <p className="mt-1 text-sm leading-5 text-stone-600">
@@ -250,7 +252,7 @@ export function CoachPanel({
                         </button>
                       </div>
                       <textarea
-                        className="min-h-24 w-full resize-none rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 py-2 text-sm leading-6 text-[#26231f] outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
+                        className="min-h-24 w-full resize-none rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 py-2 text-sm leading-6 text-[#201d35] outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
                         value={rebuttalDraft}
                         autoFocus
                         onChange={(event) => setRebuttalDraft(event.target.value)}
@@ -258,7 +260,7 @@ export function CoachPanel({
                       />
                       <div className="mt-2 flex justify-end">
                         <button
-                          className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#0f6f68] px-3 text-sm font-semibold text-white shadow-sm shadow-[#0f6f68]/15 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0b5f59] focus:outline-none focus:ring-4 focus:ring-[#0f6f68]/20 disabled:cursor-not-allowed disabled:opacity-45"
+                          className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#6558f5] px-3 text-sm font-semibold text-white shadow-sm shadow-[#6558f5]/15 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5145d9] focus:outline-none focus:ring-4 focus:ring-[#6558f5]/20 disabled:cursor-not-allowed disabled:opacity-45"
                           type="submit"
                           disabled={!rebuttalDraft.trim() || isPending}
                         >
@@ -303,7 +305,7 @@ function FeedbackBlock({
       </h3>
       <p
         className={`mt-1 whitespace-pre-wrap break-words text-sm leading-6 ${
-          strong ? "font-semibold text-[#26231f]" : "text-stone-700"
+          strong ? "font-semibold text-[#201d35]" : "text-stone-700"
         }`}
       >
         {value}

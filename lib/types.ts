@@ -93,105 +93,98 @@ export type CoachContextOption = {
   label: string;
 };
 
-export const DEFAULT_CHAT_MODEL = "x-ai/grok-4.3";
+export const DEFAULT_CHAT_MODEL = "openai/gpt-5.6-luna";
 
-export const DEFAULT_COACH_MODEL = "google/gemini-3.5-flash";
+export const DEFAULT_COACH_MODEL = "openai/gpt-5.6-luna";
 
-export const DEFAULT_TTS_MODEL = "openai/gpt-4o-mini-tts-2025-12-15";
+export const DEFAULT_TTS_MODEL = "google/gemini-3.1-flash-tts-preview";
 
-export const DEFAULT_TTS_VOICE = "nova";
+export const DEFAULT_TTS_VOICE = "Achird";
 
 export const TTS_VOICE_OPTIONS: TtsVoiceOption[] = [
   {
-    value: "alloy",
-    label: "Alloy",
-    tone: "balanced",
-    profile: "Neutral range, steady pace, low-drama delivery.",
-    bestFor: "General practice and everyday conversation.",
-  },
-  {
-    value: "ash",
-    label: "Ash",
-    tone: "calm",
-    profile: "Lower, softer, composed delivery with a relaxed feel.",
-    bestFor: "Slow conversation, reflection, and gentle coaching.",
-  },
-  {
-    value: "ballad",
-    label: "Ballad",
-    tone: "melodic",
-    profile: "Smooth, expressive, slightly theatrical cadence.",
-    bestFor: "Storytelling, role-play, and expressive reading.",
-  },
-  {
-    value: "coral",
-    label: "Coral",
-    tone: "bright",
-    profile: "Higher-energy, upbeat, clear delivery.",
-    bestFor: "Friendly chats, travel scenes, and lively practice.",
-  },
-  {
-    value: "echo",
-    label: "Echo",
-    tone: "deep",
-    profile: "Lower range, resonant, direct speaking style.",
-    bestFor: "Interviews, presentations, and confident responses.",
-  },
-  {
-    value: "fable",
-    label: "Fable",
-    tone: "warm",
-    profile: "Warm, characterful, narrative-friendly delivery.",
-    bestFor: "Casual role-play and story-like scenarios.",
-  },
-  {
-    value: "nova",
-    label: "Nova",
+    value: "Achird",
+    label: "Achird",
     tone: "friendly",
-    profile: "Clear, bright, approachable conversational sound.",
+    profile: "Friendly, approachable conversational delivery.",
     bestFor: "Default daily English practice.",
   },
   {
-    value: "onyx",
-    label: "Onyx",
-    tone: "grounded",
-    profile: "Low range, firm, polished delivery.",
-    bestFor: "Professional, formal, or serious scenarios.",
+    value: "Iapetus",
+    label: "Iapetus",
+    tone: "clear",
+    profile: "Clear, precise delivery that is easy to follow by ear.",
+    bestFor: "Listening practice and careful explanations.",
   },
   {
-    value: "sage",
-    label: "Sage",
-    tone: "measured",
-    profile: "Even, thoughtful, calm delivery.",
-    bestFor: "Explanations, tutoring scenes, and careful listening.",
+    value: "Sulafat",
+    label: "Sulafat",
+    tone: "warm",
+    profile: "Warm, welcoming delivery with a natural cadence.",
+    bestFor: "Casual conversation and supportive coaching.",
   },
   {
-    value: "shimmer",
-    label: "Shimmer",
-    tone: "light",
-    profile: "Light, airy, friendly delivery with gentle energy.",
-    bestFor: "Soft daily conversation and beginner-friendly practice.",
+    value: "Zephyr",
+    label: "Zephyr",
+    tone: "bright",
+    profile: "Bright, crisp delivery with an energetic feel.",
+    bestFor: "Friendly chats and lively practice.",
   },
   {
-    value: "verse",
-    label: "Verse",
-    tone: "expressive",
-    profile: "Dynamic, modern, animated delivery.",
-    bestFor: "Natural banter, expressive scenes, and varied emotion.",
+    value: "Puck",
+    label: "Puck",
+    tone: "upbeat",
+    profile: "Upbeat, animated delivery with playful energy.",
+    bestFor: "Role-play, storytelling, and natural banter.",
   },
   {
-    value: "marin",
-    label: "Marin",
-    tone: "natural",
-    profile: "Natural, fluent, high-quality conversational delivery.",
-    bestFor: "Best-quality everyday speech practice.",
+    value: "Charon",
+    label: "Charon",
+    tone: "informative",
+    profile: "Informative, composed, presenter-like delivery.",
+    bestFor: "Explanations, interviews, and work scenarios.",
   },
   {
-    value: "cedar",
-    label: "Cedar",
-    tone: "natural",
-    profile: "Natural, grounded, high-quality conversational delivery.",
-    bestFor: "Best-quality professional or steady conversation.",
+    value: "Kore",
+    label: "Kore",
+    tone: "firm",
+    profile: "Firm, confident delivery with strong articulation.",
+    bestFor: "Presentations and professional practice.",
+  },
+  {
+    value: "Leda",
+    label: "Leda",
+    tone: "youthful",
+    profile: "Youthful, light delivery with an informal feel.",
+    bestFor: "Everyday conversation and social scenarios.",
+  },
+  {
+    value: "Aoede",
+    label: "Aoede",
+    tone: "breezy",
+    profile: "Breezy, relaxed delivery with an easy rhythm.",
+    bestFor: "Travel scenes and casual conversation.",
+  },
+  {
+    value: "Callirrhoe",
+    label: "Callirrhoe",
+    tone: "easy-going",
+    profile: "Easy-going delivery with a calm conversational pace.",
+    bestFor: "Beginner-friendly and low-pressure practice.",
+  },
+  {
+    value: "Algieba",
+    label: "Algieba",
+    tone: "smooth",
+    profile: "Smooth, polished delivery with even pacing.",
+    bestFor: "Fluent shadowing and professional conversation.",
+  },
+  {
+    value: "Achernar",
+    label: "Achernar",
+    tone: "soft",
+    profile: "Soft, gentle delivery with a restrained tone.",
+    bestFor: "Reflection, careful listening, and gentle coaching.",
   },
 ];
 

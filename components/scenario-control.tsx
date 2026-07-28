@@ -140,9 +140,9 @@ export function ScenarioControl({
   return (
     <div className="relative z-50">
       <button
-        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold shadow-sm transition-all duration-200 hover:-translate-y-0.5 ${
+        className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold shadow-sm transition-all duration-200 hover:-translate-y-0.5 sm:h-8 ${
           hasScenario
-            ? "border-[#0f6f68]/25 bg-[#eef6f3] text-[#0f6f68] shadow-stone-900/[0.03]"
+            ? "border-[#6558f5]/25 bg-[#eeecff] text-[#6558f5] shadow-stone-900/[0.03]"
             : "border-stone-900/10 bg-[#fffdf8]/70 text-stone-600 hover:bg-[#fffdf8]"
         }`}
         type="button"
@@ -162,10 +162,10 @@ export function ScenarioControl({
       </button>
 
       {open ? (
-        <div className="animate-soft-rise absolute right-0 top-10 z-50 w-[min(500px,calc(100vw-2rem))] rounded-lg border border-stone-900/10 bg-[#fffdf8]/95 p-4 shadow-2xl shadow-stone-900/10 backdrop-blur">
+        <div className="scenario-popover animate-soft-rise absolute right-0 top-11 z-50 max-h-[min(70dvh,560px)] w-[min(500px,calc(100vw-1.25rem))] overflow-y-auto p-4 backdrop-blur sm:top-10 sm:w-[min(500px,calc(100vw-2rem))]">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-sm font-bold text-[#26231f]">
+              <h3 className="text-sm font-bold text-[#201d35]">
                 Conversation Scenario
               </h3>
               <p className="mt-1 text-sm leading-5 text-stone-500">
@@ -189,8 +189,8 @@ export function ScenarioControl({
                   key={preset.id}
                   className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                     selectedPresetId === preset.id
-                      ? "border-[#0f6f68]/35 bg-[#eef6f3] text-[#0f6f68]"
-                      : "border-stone-900/10 bg-stone-50 text-stone-700 hover:-translate-y-0.5 hover:border-[#0f6f68]/25 hover:bg-[#eef6f3] hover:text-[#0f6f68]"
+                      ? "border-[#6558f5]/35 bg-[#eeecff] text-[#6558f5]"
+                      : "border-stone-900/10 bg-stone-50 text-stone-700 hover:-translate-y-0.5 hover:border-[#6558f5]/25 hover:bg-[#eeecff] hover:text-[#6558f5]"
                   }`}
                   type="button"
                   onClick={() => setDraft(preset.value)}
@@ -206,7 +206,7 @@ export function ScenarioControl({
           </div>
 
           <textarea
-            className="min-h-28 w-full resize-none rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 py-2 text-sm leading-6 text-[#26231f] outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
+            className="min-h-28 w-full resize-none rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 py-2 text-sm leading-6 text-[#201d35] outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Example: Practice rebooking a flight at the airport. Chat Partner plays the airline agent."
@@ -239,7 +239,7 @@ export function ScenarioControl({
               </button>
             </div>
             <button
-              className="shine-sweep inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#2f3733] px-4 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#252d29] focus:outline-none focus:ring-4 focus:ring-[#0f6f68]/15"
+              className="shine-sweep inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#201d35] px-4 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#171529] focus:outline-none focus:ring-4 focus:ring-[#6558f5]/15"
               type="button"
               onClick={saveScenario}
             >
@@ -252,7 +252,7 @@ export function ScenarioControl({
             <div className="mt-4 border-t border-stone-900/10 pt-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h4 className="text-sm font-bold text-[#26231f]">
+                  <h4 className="text-sm font-bold text-[#201d35]">
                     Preset Library
                   </h4>
                   <p className="mt-1 text-sm leading-5 text-stone-500">
@@ -270,12 +270,12 @@ export function ScenarioControl({
               </div>
 
               {editingPreset ? (
-                <div className="mt-3 rounded-lg border border-[#0f6f68]/15 bg-[#eef6f3]/65 p-3">
+                <div className="mt-3 rounded-lg border border-[#6558f5]/15 bg-[#eeecff]/65 p-3">
                   <label className="block text-xs font-bold uppercase tracking-[0.16em] text-stone-500">
                     Preset name
                   </label>
                   <input
-                    className="mt-1 h-9 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-[#26231f] outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
+                    className="mt-1 h-9 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-[#201d35] outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
                     value={editingPreset.label}
                     onChange={(event) =>
                       setEditingPreset((current) =>
@@ -290,7 +290,7 @@ export function ScenarioControl({
                     Scenario
                   </label>
                   <textarea
-                    className="mt-1 min-h-24 w-full resize-none rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 py-2 text-sm leading-6 text-[#26231f] outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
+                    className="mt-1 min-h-24 w-full resize-none rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 py-2 text-sm leading-6 text-[#201d35] outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
                     value={editingPreset.value}
                     onChange={(event) =>
                       setEditingPreset((current) =>
@@ -318,7 +318,7 @@ export function ScenarioControl({
                       Cancel
                     </button>
                     <button
-                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#0f6f68] px-3 text-sm font-semibold text-white shadow-sm shadow-[#0f6f68]/15 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0b5f59] focus:outline-none focus:ring-4 focus:ring-[#0f6f68]/20"
+                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#6558f5] px-3 text-sm font-semibold text-white shadow-sm shadow-[#6558f5]/15 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5145d9] focus:outline-none focus:ring-4 focus:ring-[#6558f5]/20"
                       type="button"
                       onClick={savePreset}
                     >
@@ -342,7 +342,7 @@ export function ScenarioControl({
                         onClick={() => setDraft(preset.value)}
                         title="Use this preset"
                       >
-                        <span className="block truncate text-sm font-semibold text-[#26231f]">
+                        <span className="block truncate text-sm font-semibold text-[#201d35]">
                           {preset.label}
                         </span>
                         <span className="mt-0.5 line-clamp-1 block text-xs text-stone-500">

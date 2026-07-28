@@ -59,21 +59,21 @@ export function SettingsPanel({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#26231f]/32 px-4 py-6 backdrop-blur-sm"
+      className="settings-backdrop fixed inset-0 z-50 flex items-end justify-center px-0 py-0 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-title"
     >
-      <section className="animate-soft-rise flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-stone-900/10 bg-[#fffdf8]/95 shadow-2xl shadow-stone-900/15">
-        <header className="flex items-center justify-between border-b border-stone-900/10 bg-[#fffdf8]/80 px-5 py-4 backdrop-blur">
+      <section className="settings-sheet animate-soft-rise flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] sm:max-h-full sm:rounded-[28px]">
+        <header className="settings-header flex items-center justify-between px-5 py-4 backdrop-blur">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="shine-sweep flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#2f3733] text-white shadow-sm shadow-stone-900/10">
+            <div className="shine-sweep flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#201d35] text-white shadow-sm shadow-stone-900/10">
               <SlidersHorizontal className="size-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <h2
                 id="settings-title"
-                className="truncate text-lg font-bold text-[#26231f]"
+                className="truncate text-lg font-bold text-[#201d35]"
               >
                 Settings
               </h2>
@@ -94,7 +94,7 @@ export function SettingsPanel({
 
         <div className="min-h-0 overflow-y-auto px-5 py-5">
           <div className="grid gap-5">
-            <section className="rounded-lg border border-stone-900/10 bg-stone-50/70 p-4 shadow-sm shadow-stone-900/[0.04]">
+            <section className="settings-card rounded-2xl p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-stone-600">
@@ -107,7 +107,7 @@ export function SettingsPanel({
                 <span
                   className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${
                     hasKey
-                      ? "border-[#0f6f68]/20 bg-[#eef6f3] text-[#0f6f68]"
+                      ? "border-[#6558f5]/20 bg-[#eeecff] text-[#6558f5]"
                       : "border-[#9f7a31]/20 bg-[#f7efe0] text-[#7a5d22]"
                   }`}
                 >
@@ -123,7 +123,7 @@ export function SettingsPanel({
               <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                 API Key
               </label>
-              <div className="flex h-11 rounded-lg border border-stone-900/10 bg-[#fffdf8] transition-all duration-200 focus-within:border-[#0f6f68]/45 focus-within:shadow-md focus-within:shadow-[#0f6f68]/10 focus-within:ring-4 focus-within:ring-[#0f6f68]/10">
+              <div className="flex h-11 rounded-lg border border-stone-900/10 bg-[#fffdf8] transition-all duration-200 focus-within:border-[#6558f5]/45 focus-within:shadow-md focus-within:shadow-[#6558f5]/10 focus-within:ring-4 focus-within:ring-[#6558f5]/10">
                 <input
                   className="min-w-0 flex-1 bg-transparent px-3 text-sm text-stone-900 outline-none placeholder:text-stone-400"
                   value={settings.openRouterApiKey}
@@ -150,13 +150,13 @@ export function SettingsPanel({
               </div>
             </section>
 
-            <section className="grid gap-4 rounded-lg border border-stone-900/10 bg-[#fffdf8] p-4 shadow-sm shadow-stone-900/[0.04] sm:grid-cols-2">
+            <section className="settings-card grid gap-4 rounded-2xl p-4 sm:grid-cols-2">
               <ModelField
                 label="Chat Model"
                 value={settings.chatModel}
                 models={models}
                 listId="chat-model-options"
-                placeholder="x-ai/grok-4.3"
+                placeholder="openai/gpt-5.6-luna"
                 onChange={(value) => update({ chatModel: value })}
               />
 
@@ -165,13 +165,13 @@ export function SettingsPanel({
                 value={settings.coachModel}
                 models={models}
                 listId="coach-model-options"
-                placeholder="google/gemini-3.5-flash"
+                placeholder="openai/gpt-5.6-luna"
                 onChange={(value) => update({ coachModel: value })}
               />
 
               <div className="sm:col-span-2">
                 <button
-                  className="shine-sweep inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-900/10 bg-[#2f3733] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#252d29] focus:outline-none focus:ring-4 focus:ring-[#0f6f68]/15 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="shine-sweep inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-900/10 bg-[#201d35] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#171529] focus:outline-none focus:ring-4 focus:ring-[#6558f5]/15 disabled:cursor-not-allowed disabled:opacity-45"
                   type="button"
                   onClick={onRefreshModels}
                   disabled={modelsLoading}
@@ -194,16 +194,16 @@ export function SettingsPanel({
               </div>
             </section>
 
-            <section className="grid gap-4 rounded-lg border border-stone-900/10 bg-[#fffdf8] p-4 shadow-sm shadow-stone-900/[0.04] sm:grid-cols-[minmax(0,1fr)_220px]">
+            <section className="settings-card grid gap-4 rounded-2xl p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
               <div className="min-w-0">
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                   TTS Model
                 </label>
                 <input
-                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
+                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
                   value={settings.ttsModel}
                   onChange={(event) => update({ ttsModel: event.target.value })}
-                  placeholder="openai/gpt-4o-mini-tts-2025-12-15"
+                  placeholder="google/gemini-3.1-flash-tts-preview"
                 />
               </div>
 
@@ -212,7 +212,7 @@ export function SettingsPanel({
                   Voice
                 </label>
                 <select
-                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
+                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
                   value={settings.ttsVoice}
                   onChange={(event) => update({ ttsVoice: event.target.value })}
                 >
@@ -225,10 +225,10 @@ export function SettingsPanel({
               </div>
               <div className="rounded-lg border border-stone-900/10 bg-stone-50/80 p-3 sm:col-span-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-bold text-[#26231f]">
+                  <span className="text-sm font-bold text-[#201d35]">
                     {selectedVoice.label}
                   </span>
-                  <span className="rounded-full border border-[#0f6f68]/15 bg-[#eef6f3] px-2 py-0.5 text-xs font-bold text-[#0f6f68]">
+                  <span className="rounded-full border border-[#6558f5]/15 bg-[#eeecff] px-2 py-0.5 text-xs font-bold text-[#6558f5]">
                     {selectedVoice.tone}
                   </span>
                 </div>
@@ -241,13 +241,13 @@ export function SettingsPanel({
               </div>
             </section>
 
-            <section className="grid gap-4 rounded-lg border border-stone-900/10 bg-[#fffdf8] p-4 shadow-sm shadow-stone-900/[0.04] sm:grid-cols-[minmax(0,1fr)_150px_110px]">
+            <section className="settings-card grid gap-4 rounded-2xl p-4 sm:grid-cols-[minmax(0,1fr)_150px_110px]">
               <div className="min-w-0">
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                   Coach Context
                 </label>
                 <select
-                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
+                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
                   value={settings.contextMode}
                   onChange={(event) =>
                     update({
@@ -268,7 +268,7 @@ export function SettingsPanel({
                   Explanation
                 </label>
                 <select
-                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
+                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
                   value={settings.explanationLanguage}
                   onChange={(event) =>
                     update({
@@ -287,7 +287,7 @@ export function SettingsPanel({
                   Turns
                 </label>
                 <input
-                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10 disabled:cursor-not-allowed disabled:opacity-45"
                   type="number"
                   min={1}
                   max={12}
@@ -330,7 +330,7 @@ function ModelField({
         {label}
       </label>
       <input
-        className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#0f6f68]/45 focus:shadow-md focus:shadow-[#0f6f68]/10 focus:ring-4 focus:ring-[#0f6f68]/10"
+        className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
         value={value}
         list={listId}
         onChange={(event) => onChange(event.target.value)}
