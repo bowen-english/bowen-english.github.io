@@ -2,8 +2,10 @@
 
 import {
   CheckCircle2,
+  CircleDollarSign,
   Eye,
   EyeOff,
+  ExternalLink,
   KeyRound,
   Loader2,
   RefreshCw,
@@ -11,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import type { OpenRouterCreditSummary } from "@/lib/openrouter-browser";
 import {
   COACH_CONTEXT_OPTIONS,
   TTS_VOICE_OPTIONS,
@@ -27,7 +30,11 @@ type SettingsPanelProps = {
   modelsLoading: boolean;
   modelsError: string | null;
   modelsSource: "user" | "public" | null;
+  creditSummary: OpenRouterCreditSummary | null;
+  creditLoading: boolean;
+  creditError: string | null;
   onChange: (settings: CoachSettings) => void;
+  onRefreshCredits: () => void;
   onRefreshModels: () => void;
   onClose: () => void;
 };
@@ -39,7 +46,11 @@ export function SettingsPanel({
   modelsLoading,
   modelsError,
   modelsSource,
+  creditSummary,
+  creditLoading,
+  creditError,
   onChange,
+  onRefreshCredits,
   onRefreshModels,
   onClose,
 }: SettingsPanelProps) {
@@ -148,6 +159,14 @@ export function SettingsPanel({
                   )}
                 </button>
               </div>
+
+              <CreditSummaryCard
+                hasKey={hasKey}
+                summary={creditSummary}
+                loading={creditLoading}
+                error={creditError}
+                onRefresh={onRefreshCredits}
+              />
             </section>
 
             <section className="settings-card grid gap-4 rounded-2xl p-4 sm:grid-cols-2">
@@ -307,6 +326,128 @@ export function SettingsPanel({
       </section>
     </div>
   );
+}
+
+function CreditSummaryCard({
+  hasKey,
+  summary,
+  loading,
+  error,
+  onRefresh,
+}: {
+  hasKey: boolean;
+  summary: OpenRouterCreditSummary | null;
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  const accountBalance = summary?.accountBalance ?? null;
+  const keyRemaining = summary?.keyLimitRemaining ?? null;
+  const primaryLabel =
+    accountBalance !== null
+      ? "Account balance"
+      : keyRemaining !== null
+        ? "Key budget remaining"
+        : "API key usage";
+  const primaryValue =
+    accountBalance !== null
+      ? formatUsd(accountBalance)
+      : keyRemaining !== null
+        ? formatUsd(keyRemaining)
+        : summary?.keyUsage !== null && summary?.keyUsage !== undefined
+          ? formatUsd(summary.keyUsage)
+          : "—";
+
+  return (
+    <div
+      className="mt-4 rounded-2xl border border-[#6558f5]/12 bg-gradient-to-br from-[#f2f0ff] to-white p-3.5"
+      aria-live="polite"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#6558f5] text-white shadow-md shadow-[#6558f5]/20">
+          <CircleDollarSign className="size-5" aria-hidden="true" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#807a9b]">
+                {loading ? "Checking OpenRouter" : primaryLabel}
+              </p>
+              <p className="mt-1 text-2xl font-extrabold tracking-[-0.035em] text-[#201d35]">
+                {loading ? "···" : primaryValue}
+              </p>
+            </div>
+            <button
+              className="flex size-9 shrink-0 items-center justify-center border border-[#6558f5]/12 bg-white text-[#6558f5] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45"
+              type="button"
+              onClick={onRefresh}
+              disabled={!hasKey || loading}
+              title="Refresh balance"
+            >
+              <RefreshCw
+                className={`size-4 ${loading ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+
+          {!hasKey ? (
+            <p className="mt-2 text-sm leading-5 text-stone-500">
+              Add an API key to check its usage and available budget.
+            </p>
+          ) : error ? (
+            <p className="mt-2 text-sm leading-5 text-rose-700">{error}</p>
+          ) : summary && !loading ? (
+            <div className="mt-2 text-sm leading-5 text-stone-500">
+              {accountBalance !== null ? (
+                <p>
+                  {formatUsd(summary.accountUsage ?? 0)} used from{" "}
+                  {formatUsd(summary.totalCredits ?? 0)} purchased credits.
+                </p>
+              ) : keyRemaining !== null ? (
+                <p>
+                  {formatUsd(summary.keyUsage ?? 0)} used
+                  {summary.keyLimitReset
+                    ? ` · ${summary.keyLimitReset} limit`
+                    : " · key spending limit"}
+                  .
+                </p>
+              ) : (
+                <p>
+                  This key has no spending limit.{" "}
+                  {formatUsd(summary.keyUsage ?? 0)} used by this key.
+                </p>
+              )}
+              {summary.accountBalanceStatus !== "available" ? (
+                <p className="mt-1">
+                  Exact account balance requires an OpenRouter Management Key.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <a
+            className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-[#6558f5] transition hover:text-[#5145d9]"
+            href="https://openrouter.ai/settings/credits"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open billing
+            <ExternalLink className="size-3" aria-hidden="true" />
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatUsd(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(value);
 }
 
 function ModelField({

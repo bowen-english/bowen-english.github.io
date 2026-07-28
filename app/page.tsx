@@ -30,7 +30,9 @@ import {
 import {
   callOpenRouterFromBrowser,
   callOpenRouterSpeechFromBrowser,
+  fetchOpenRouterCreditSummaryFromBrowser,
   fetchOpenRouterModelsFromBrowser,
+  type OpenRouterCreditSummary,
 } from "@/lib/openrouter-browser";
 import {
   CHAT_PARTNER_SYSTEM_PROMPT,
@@ -397,6 +399,10 @@ export default function Home() {
   );
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [creditSummary, setCreditSummary] =
+    useState<OpenRouterCreditSummary | null>(null);
+  const [creditLoading, setCreditLoading] = useState(false);
+  const [creditError, setCreditError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileView, setMobileView] = useState<MobileView>("chat");
   const [speechPendingIds, setSpeechPendingIds] = useState<string[]>([]);
@@ -409,6 +415,7 @@ export default function Home() {
   );
   const audioUrlsRef = useRef(new Map<string, string>());
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const creditRequestIdRef = useRef(0);
 
   const activeSession =
     sessions.find((session) => session.id === currentSessionId) ??
@@ -464,6 +471,57 @@ export default function Home() {
       setModelsLoading(false);
     }
   }, [effectiveSettings.openRouterApiKey]);
+
+  const refreshCredits = useCallback(async () => {
+    const apiKey = effectiveSettings.openRouterApiKey.trim();
+    const requestId = ++creditRequestIdRef.current;
+
+    if (apiKey.length < 20) {
+      setCreditSummary(null);
+      setCreditError(null);
+      setCreditLoading(false);
+      return;
+    }
+
+    setCreditLoading(true);
+    setCreditError(null);
+
+    try {
+      const summary =
+        await fetchOpenRouterCreditSummaryFromBrowser(apiKey);
+
+      if (creditRequestIdRef.current === requestId) {
+        setCreditSummary(summary);
+      }
+    } catch (error) {
+      if (creditRequestIdRef.current === requestId) {
+        setCreditSummary(null);
+        setCreditError(
+          error instanceof Error
+            ? error.message
+            : "Failed to load OpenRouter balance.",
+        );
+      }
+    } finally {
+      if (creditRequestIdRef.current === requestId) {
+        setCreditLoading(false);
+      }
+    }
+  }, [effectiveSettings.openRouterApiKey]);
+
+  useEffect(() => {
+    if (!settingsOpen) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void refreshCredits();
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [refreshCredits, settingsOpen]);
 
   useEffect(() => {
     if (!sessionsHydrated || !currentSessionHydrated) {
@@ -1535,7 +1593,11 @@ ${contextText}
         modelsLoading={modelsLoading}
         modelsError={modelsError}
         modelsSource={modelsSource}
+        creditSummary={creditSummary}
+        creditLoading={creditLoading}
+        creditError={creditError}
         onChange={setSettings}
+        onRefreshCredits={refreshCredits}
         onRefreshModels={refreshModels}
         onClose={() => setSettingsOpen(false)}
       />

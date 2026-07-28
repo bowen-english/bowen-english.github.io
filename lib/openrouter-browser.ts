@@ -5,6 +5,20 @@ export type BrowserOpenRouterMessage = {
   content: string;
 };
 
+export type OpenRouterCreditSummary = {
+  accountBalance: number | null;
+  accountBalanceStatus:
+    | "available"
+    | "management_key_required"
+    | "unavailable";
+  accountUsage: number | null;
+  totalCredits: number | null;
+  keyLimit: number | null;
+  keyLimitRemaining: number | null;
+  keyLimitReset: string | null;
+  keyUsage: number | null;
+};
+
 type RawOpenRouterModel = {
   id: string;
   name?: string;
@@ -50,6 +64,85 @@ function getErrorMessage(data: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+function getDataObject(data: unknown) {
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "data" in data &&
+    typeof data.data === "object" &&
+    data.data !== null
+  ) {
+    return data.data as Record<string, unknown>;
+  }
+
+  return null;
+}
+
+function getFiniteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+export async function fetchOpenRouterCreditSummaryFromBrowser(apiKey: string) {
+  const normalizedApiKey = apiKey.trim();
+
+  if (!normalizedApiKey) {
+    throw new Error("OpenRouter API key is not configured.");
+  }
+
+  const headers = {
+    Authorization: `Bearer ${normalizedApiKey}`,
+    "HTTP-Referer": window.location.origin,
+    "X-Title": "English Shadow Coach",
+  };
+  const [creditsResult, keyResult] = await Promise.allSettled([
+    fetch("https://openrouter.ai/api/v1/credits", { headers }),
+    fetch("https://openrouter.ai/api/v1/key", { headers }),
+  ]);
+  const creditsResponse =
+    creditsResult.status === "fulfilled" ? creditsResult.value : null;
+  const keyResponse = keyResult.status === "fulfilled" ? keyResult.value : null;
+  const [creditsPayload, keyPayload] = await Promise.all([
+    creditsResponse
+      ? (creditsResponse.json().catch(() => null) as Promise<unknown>)
+      : Promise.resolve(null),
+    keyResponse
+      ? (keyResponse.json().catch(() => null) as Promise<unknown>)
+      : Promise.resolve(null),
+  ]);
+
+  if (!creditsResponse?.ok && !keyResponse?.ok) {
+    throw new Error(
+      getErrorMessage(
+        keyPayload ?? creditsPayload,
+        `OpenRouter balance request failed (${keyResponse?.status ?? creditsResponse?.status ?? "network error"}).`,
+      ),
+    );
+  }
+
+  const credits = creditsResponse?.ok ? getDataObject(creditsPayload) : null;
+  const key = keyResponse?.ok ? getDataObject(keyPayload) : null;
+  const totalCredits = getFiniteNumber(credits?.total_credits);
+  const accountUsage = getFiniteNumber(credits?.total_usage);
+
+  return {
+    accountBalance:
+      totalCredits !== null && accountUsage !== null
+        ? totalCredits - accountUsage
+        : null,
+    accountBalanceStatus: creditsResponse?.ok
+      ? ("available" as const)
+      : creditsResponse?.status === 403
+        ? ("management_key_required" as const)
+        : ("unavailable" as const),
+    accountUsage,
+    totalCredits,
+    keyLimit: getFiniteNumber(key?.limit),
+    keyLimitRemaining: getFiniteNumber(key?.limit_remaining),
+    keyLimitReset: typeof key?.limit_reset === "string" ? key.limit_reset : null,
+    keyUsage: getFiniteNumber(key?.usage),
+  } satisfies OpenRouterCreditSummary;
 }
 
 function normalizeModel(model: RawOpenRouterModel): OpenRouterModel {
