@@ -29,6 +29,7 @@ type ChatPanelProps = {
   scenario: string;
   scenarioPresets: ScenarioPreset[];
   speechEnabled: boolean;
+  conversationVoice: string | null;
   hideAssistantText: boolean;
   speechPendingIds: string[];
   playingMessageId: string | null;
@@ -53,6 +54,7 @@ export function ChatPanel({
   scenario,
   scenarioPresets,
   speechEnabled,
+  conversationVoice,
   hideAssistantText,
   speechPendingIds,
   playingMessageId,
@@ -103,6 +105,11 @@ export function ChatPanel({
           </h2>
           <p className="mt-1 line-clamp-1 text-sm text-[#827d98]">
             {scenario.trim() || "Natural English conversation"}
+            <span className="text-[#6558f5]">
+              {conversationVoice
+                ? ` · Voice: ${conversationVoice}`
+                : " · Voice: auto on first play"}
+            </span>
           </p>
         </div>
         <div className="flex max-w-[68%] shrink-0 flex-wrap items-center justify-end gap-1.5 sm:max-w-none sm:gap-2">

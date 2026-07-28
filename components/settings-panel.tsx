@@ -228,7 +228,7 @@ export function SettingsPanel({
 
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
-                  Voice
+                  Fallback Voice
                 </label>
                 <select
                   className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
@@ -256,6 +256,11 @@ export function SettingsPanel({
                 </p>
                 <p className="mt-1 text-sm leading-5 text-stone-500">
                   Best for: {selectedVoice.bestFor}
+                </p>
+                <p className="mt-2 border-t border-stone-900/8 pt-2 text-xs leading-5 text-[#6558f5]">
+                  Gemini automatically casts one voice per conversation on its
+                  first playback. This voice is used only if casting is
+                  unavailable.
                 </p>
               </div>
             </section>

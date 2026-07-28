@@ -43,7 +43,7 @@ const GEMINI_TTS_SAMPLE_RATE = 24_000;
 const GEMINI_TTS_CHANNELS = 1;
 const GEMINI_TTS_BITS_PER_SAMPLE = 16;
 
-function isGeminiTtsModel(model: string) {
+export function isGeminiTtsModel(model: string) {
   const normalizedModel = model.toLowerCase();
   return normalizedModel.startsWith("google/gemini-") &&
     normalizedModel.includes("-tts");

@@ -66,6 +66,7 @@ export type ConversationSession = {
   title: string;
   titleEdited?: boolean;
   scenario?: string;
+  ttsVoice?: string;
   speechEnabled?: boolean;
   hideAssistantText?: boolean;
   messages: ChatMessage[];
@@ -152,11 +153,25 @@ export const TTS_VOICE_OPTIONS: TtsVoiceOption[] = [
     bestFor: "Presentations and professional practice.",
   },
   {
+    value: "Fenrir",
+    label: "Fenrir",
+    tone: "excitable",
+    profile: "Excitable, expressive delivery with high energy.",
+    bestFor: "Animated characters and enthusiastic conversation.",
+  },
+  {
     value: "Leda",
     label: "Leda",
     tone: "youthful",
     profile: "Youthful, light delivery with an informal feel.",
     bestFor: "Everyday conversation and social scenarios.",
+  },
+  {
+    value: "Orus",
+    label: "Orus",
+    tone: "firm",
+    profile: "Firm, grounded delivery with a decisive presence.",
+    bestFor: "Leadership, negotiation, and direct conversation.",
   },
   {
     value: "Aoede",
@@ -173,6 +188,27 @@ export const TTS_VOICE_OPTIONS: TtsVoiceOption[] = [
     bestFor: "Beginner-friendly and low-pressure practice.",
   },
   {
+    value: "Autonoe",
+    label: "Autonoe",
+    tone: "bright",
+    profile: "Bright, open delivery with a positive tone.",
+    bestFor: "Welcoming conversations and upbeat social scenes.",
+  },
+  {
+    value: "Enceladus",
+    label: "Enceladus",
+    tone: "breathy",
+    profile: "Breathy, intimate delivery with a softer presence.",
+    bestFor: "Reflective dialogue and atmospheric storytelling.",
+  },
+  {
+    value: "Umbriel",
+    label: "Umbriel",
+    tone: "easy-going",
+    profile: "Relaxed, unhurried delivery with understated warmth.",
+    bestFor: "Casual chats and low-pressure role-play.",
+  },
+  {
     value: "Algieba",
     label: "Algieba",
     tone: "smooth",
@@ -180,11 +216,102 @@ export const TTS_VOICE_OPTIONS: TtsVoiceOption[] = [
     bestFor: "Fluent shadowing and professional conversation.",
   },
   {
+    value: "Despina",
+    label: "Despina",
+    tone: "smooth",
+    profile: "Smooth, composed delivery with a natural flow.",
+    bestFor: "Interviews, hospitality, and polished dialogue.",
+  },
+  {
+    value: "Erinome",
+    label: "Erinome",
+    tone: "clear",
+    profile: "Clear, focused delivery with crisp articulation.",
+    bestFor: "Detailed explanations and listening drills.",
+  },
+  {
+    value: "Algenib",
+    label: "Algenib",
+    tone: "gravelly",
+    profile: "Textured, gravelly delivery with a distinctive character.",
+    bestFor: "Character role-play and dramatic storytelling.",
+  },
+  {
+    value: "Rasalgethi",
+    label: "Rasalgethi",
+    tone: "informative",
+    profile: "Measured, informative delivery with an expert feel.",
+    bestFor: "Technical explanations and professional scenarios.",
+  },
+  {
+    value: "Laomedeia",
+    label: "Laomedeia",
+    tone: "upbeat",
+    profile: "Upbeat, engaging delivery with conversational momentum.",
+    bestFor: "Networking, travel, and lively everyday practice.",
+  },
+  {
     value: "Achernar",
     label: "Achernar",
     tone: "soft",
     profile: "Soft, gentle delivery with a restrained tone.",
     bestFor: "Reflection, careful listening, and gentle coaching.",
+  },
+  {
+    value: "Alnilam",
+    label: "Alnilam",
+    tone: "firm",
+    profile: "Firm, steady delivery with confident pacing.",
+    bestFor: "Debate, presentations, and assertive practice.",
+  },
+  {
+    value: "Schedar",
+    label: "Schedar",
+    tone: "even",
+    profile: "Even, balanced delivery with consistent pacing.",
+    bestFor: "Long-form listening and neutral conversation.",
+  },
+  {
+    value: "Gacrux",
+    label: "Gacrux",
+    tone: "mature",
+    profile: "Mature, composed delivery with a seasoned presence.",
+    bestFor: "Mentoring, formal meetings, and thoughtful dialogue.",
+  },
+  {
+    value: "Pulcherrima",
+    label: "Pulcherrima",
+    tone: "forward",
+    profile: "Forward, energetic delivery with a strong presence.",
+    bestFor: "Sales, persuasion, and fast-moving role-play.",
+  },
+  {
+    value: "Zubenelgenubi",
+    label: "Zubenelgenubi",
+    tone: "casual",
+    profile: "Casual, relaxed delivery with an everyday feel.",
+    bestFor: "Small talk and natural social conversation.",
+  },
+  {
+    value: "Vindemiatrix",
+    label: "Vindemiatrix",
+    tone: "gentle",
+    profile: "Gentle, reassuring delivery with soft pacing.",
+    bestFor: "Supportive conversations and careful listening.",
+  },
+  {
+    value: "Sadachbia",
+    label: "Sadachbia",
+    tone: "lively",
+    profile: "Lively, animated delivery with expressive rhythm.",
+    bestFor: "Storytelling and energetic social scenarios.",
+  },
+  {
+    value: "Sadaltager",
+    label: "Sadaltager",
+    tone: "knowledgeable",
+    profile: "Knowledgeable, assured delivery with an expert tone.",
+    bestFor: "Teaching, consulting, and in-depth explanations.",
   },
 ];
 
