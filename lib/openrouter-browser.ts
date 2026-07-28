@@ -39,7 +39,47 @@ const GPT_5_6_BASE_MODELS = new Set([
   "openai/gpt-5.6-terra",
   "openai/gpt-5.6-luna",
 ]);
-const GEMINI_TTS_MODEL = "google/gemini-3.1-flash-tts-preview";
+const GEMINI_TTS_SAMPLE_RATE = 24_000;
+const GEMINI_TTS_CHANNELS = 1;
+const GEMINI_TTS_BITS_PER_SAMPLE = 16;
+
+function isGeminiTtsModel(model: string) {
+  const normalizedModel = model.toLowerCase();
+  return normalizedModel.startsWith("google/gemini-") &&
+    normalizedModel.includes("-tts");
+}
+
+function writeAscii(view: DataView, offset: number, value: string) {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index));
+  }
+}
+
+function wrapPcm16InWav(pcmBuffer: ArrayBuffer) {
+  const headerSize = 44;
+  const wavBuffer = new ArrayBuffer(headerSize + pcmBuffer.byteLength);
+  const view = new DataView(wavBuffer);
+  const bytesPerSample = GEMINI_TTS_BITS_PER_SAMPLE / 8;
+  const blockAlign = GEMINI_TTS_CHANNELS * bytesPerSample;
+  const byteRate = GEMINI_TTS_SAMPLE_RATE * blockAlign;
+
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + pcmBuffer.byteLength, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, GEMINI_TTS_CHANNELS, true);
+  view.setUint32(24, GEMINI_TTS_SAMPLE_RATE, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, GEMINI_TTS_BITS_PER_SAMPLE, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, pcmBuffer.byteLength, true);
+  new Uint8Array(wavBuffer, headerSize).set(new Uint8Array(pcmBuffer));
+
+  return new Blob([wavBuffer], { type: "audio/wav" });
+}
 
 function getErrorMessage(data: unknown, fallback: string) {
   if (
@@ -254,7 +294,7 @@ export async function callOpenRouterSpeechFromBrowser({
   }
 
   const normalizedModel = model.trim();
-  const isGeminiTts = normalizedModel === GEMINI_TTS_MODEL;
+  const isGeminiTts = isGeminiTtsModel(normalizedModel);
   const speechInput =
     isGeminiTts && instructions
       ? `${instructions}
@@ -274,7 +314,7 @@ ${input}`
       model: normalizedModel,
       input: speechInput,
       voice,
-      response_format: "mp3",
+      response_format: isGeminiTts ? "pcm" : "mp3",
       ...(instructions && !isGeminiTts
         ? {
             provider: {
@@ -311,7 +351,7 @@ ${input}`
     throw new Error("OpenRouter returned empty audio.");
   }
 
-  return blob;
+  return isGeminiTts ? wrapPcm16InWav(await blob.arrayBuffer()) : blob;
 }
 
 async function fetchModelEndpoint({
