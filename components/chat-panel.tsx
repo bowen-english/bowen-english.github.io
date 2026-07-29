@@ -405,7 +405,7 @@ function MessageBubble({
             ? isEditing
               ? "border border-[#6558f5]/25 bg-[#fffdf8] text-[#201d35] shadow-stone-900/[0.06] group-hover:-translate-y-0.5 group-hover:shadow-md"
               : "bg-[#201d35] text-white shadow-stone-900/10 group-hover:-translate-y-0.5 group-hover:shadow-md"
-            : "border border-stone-900/10 bg-[#fffdf8]/80 pr-11 text-stone-800 shadow-stone-900/[0.04] backdrop-blur group-hover:-translate-y-0.5 group-hover:bg-[#fffdf8]/95 group-hover:shadow-md"
+            : "border border-stone-900/10 bg-[#fffdf8]/80 pr-14 text-stone-800 shadow-stone-900/[0.04] backdrop-blur group-hover:-translate-y-0.5 group-hover:bg-[#fffdf8]/95 group-hover:shadow-md sm:pr-14"
         }`}
       >
         {isEditing ? (
