@@ -1,17 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="English Shadow Coach">
-  <defs>
-    <linearGradient id="background" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#8176ff"/>
-      <stop offset="1" stop-color="#5145d9"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="18" fill="url(#background)"/>
-  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-width="3.5">
-    <path d="M16 29v6" opacity=".72"/>
-    <path d="M23 23v18" opacity=".86"/>
-    <path d="M30 17v30"/>
-    <path d="M37 22v20"/>
-    <path d="M44 26v12" opacity=".86"/>
-    <path d="M51 29v6" opacity=".72"/>
-  </g>
+  <rect width="64" height="64" rx="16" fill="#201d35"/>
+  <path
+    d="M23 14h19a11 11 0 0 1 11 11v8a11 11 0 0 1-11 11H30l-11 8 2.8-8.1A11 11 0 0 1 12 33v-8a11 11 0 0 1 11-11Z"
+    fill="#6558f5"
+    transform="translate(2 2)"
+  />
+  <path
+    d="M23 14h19a11 11 0 0 1 11 11v8a11 11 0 0 1-11 11H30l-11 8 2.8-8.1A11 11 0 0 1 12 33v-8a11 11 0 0 1 11-11Z"
+    fill="#fffdf8"
+  />
+  <rect x="22" y="24.5" width="20" height="3.5" rx="1.75" fill="#6558f5"/>
+  <rect x="22" y="34.5" width="13" height="3.5" rx="1.75" fill="#6558f5"/>
 </svg>

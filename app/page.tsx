@@ -10,7 +10,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  AudioLines,
   Bot,
   KeyRound,
   MessageSquareText,
@@ -2141,7 +2140,7 @@ ${contextText}
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="brand-mark shine-sweep smooth-transition flex size-11 shrink-0 items-center justify-center text-white hover:-translate-y-0.5">
-              <AudioLines className="size-5" aria-hidden="true" />
+              <BrandGlyph className="size-7" />
             </div>
             <div className="min-w-0">
               <h1 className="brand-title truncate text-xl font-extrabold tracking-[-0.025em] text-[#201d35]">
@@ -2189,7 +2188,7 @@ ${contextText}
       <header className="mobile-header flex shrink-0 items-center justify-between gap-3 px-3 py-2.5 backdrop-blur-xl lg:hidden">
         <div className="flex min-w-0 items-center gap-3">
           <div className="brand-mark shine-sweep flex size-9 shrink-0 items-center justify-center text-white">
-            <AudioLines className="size-4" aria-hidden="true" />
+            <BrandGlyph className="size-6" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-sm font-bold tracking-normal text-[#201d35]">
@@ -2411,6 +2410,43 @@ ${contextText}
         onClose={closeSettings}
       />
     </main>
+  );
+}
+
+function BrandGlyph({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 64 64"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M23 14h19a11 11 0 0 1 11 11v8a11 11 0 0 1-11 11H30l-11 8 2.8-8.1A11 11 0 0 1 12 33v-8a11 11 0 0 1 11-11Z"
+        fill="#6558f5"
+        transform="translate(2 2)"
+      />
+      <path
+        d="M23 14h19a11 11 0 0 1 11 11v8a11 11 0 0 1-11 11H30l-11 8 2.8-8.1A11 11 0 0 1 12 33v-8a11 11 0 0 1 11-11Z"
+        fill="#fffdf8"
+      />
+      <rect
+        x="22"
+        y="24.5"
+        width="20"
+        height="3.5"
+        rx="1.75"
+        fill="#6558f5"
+      />
+      <rect
+        x="22"
+        y="34.5"
+        width="13"
+        height="3.5"
+        rx="1.75"
+        fill="#6558f5"
+      />
+    </svg>
   );
 }
 

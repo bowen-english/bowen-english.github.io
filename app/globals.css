@@ -251,14 +251,12 @@ select {
 }
 
 .brand-mark {
-  border: 1px solid rgba(255, 255, 255, 0.46);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  background:
-    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.36), transparent 30%),
-    linear-gradient(145deg, #7569ff 0%, #5a4de5 62%, #4034b9 100%);
+  background: #201d35;
   box-shadow:
-    0 10px 26px rgba(81, 69, 217, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+    0 10px 24px rgba(32, 29, 53, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .brand-title {
