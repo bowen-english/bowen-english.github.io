@@ -558,9 +558,6 @@ export default function Home() {
       return migrated;
     });
   }, [settingsHydrated, setSettings]);
-  const [streamingMessages, setStreamingMessages] = useState<
-    Record<string, ChatMessage>
-  >({});
   const [chatErrors, setChatErrors] = useState<SessionErrors>({});
   const [coachErrors, setCoachErrors] = useState<SessionErrors>({});
   const [models, setModels] = useState<OpenRouterModel[]>([]);
@@ -654,9 +651,6 @@ export default function Home() {
   const activeSessionId = activeSession?.id ?? null;
   const activeErrorKey = activeSessionId ?? NEW_SESSION_ERROR_KEY;
   const messages = activeSession?.messages ?? EMPTY_MESSAGES;
-  const streamingMessage = activeSessionId
-    ? streamingMessages[activeSessionId] ?? null
-    : null;
   const feedback = activeSession?.feedback ?? EMPTY_FEEDBACK;
   const scenario = activeSession?.scenario ?? "";
   const conversationVoice = isGeminiTtsModel(effectiveSettings.ttsModel)
@@ -768,7 +762,6 @@ export default function Home() {
           ],
           maxCompletionTokens: SHORT_TASK_MAX_COMPLETION_TOKENS,
           signal: controller.signal,
-          onDelta: () => undefined,
         }),
         callOpenRouterFromBrowser({
           apiKey,
@@ -1356,52 +1349,6 @@ export default function Home() {
         createdAt: new Date().toISOString(),
       };
 
-      setStreamingMessages((current) => ({
-        ...current,
-        [sessionId]: assistantMessage,
-      }));
-      let streamFrame: number | null = null;
-      let pendingStreamedContent = "";
-
-      const cancelStreamFrame = () => {
-        if (streamFrame !== null) {
-          window.cancelAnimationFrame(streamFrame);
-          streamFrame = null;
-        }
-      };
-
-      const scheduleStreamUpdate = (streamedContent: string) => {
-        pendingStreamedContent = streamedContent;
-
-        if (streamFrame !== null) {
-          return;
-        }
-
-        streamFrame = window.requestAnimationFrame(() => {
-          streamFrame = null;
-
-          if (!isCurrentRequest(requestKey, request.id)) {
-            return;
-          }
-
-          setStreamingMessages((current) => {
-            const currentMessage = current[sessionId];
-
-            if (!currentMessage || currentMessage.id !== assistantMessage.id) {
-              return current;
-            }
-
-            return {
-              ...current,
-              [sessionId]: {
-                ...currentMessage,
-                content: pendingStreamedContent,
-              },
-            };
-          });
-        });
-      };
-
       try {
         const content = await streamOpenRouterFromBrowser({
           apiKey: effectiveSettings.openRouterApiKey,
@@ -1410,9 +1357,6 @@ export default function Home() {
           maxCompletionTokens: CHAT_MAX_COMPLETION_TOKENS,
           sessionId: `chat-${sessionId}`,
           signal: request.signal,
-          onDelta: (_delta, streamedContent) => {
-            scheduleStreamUpdate(streamedContent);
-          },
           messages: [
             {
               role: "system",
@@ -1431,7 +1375,6 @@ export default function Home() {
           return;
         }
 
-        cancelStreamFrame();
         const completedMessage = { ...assistantMessage, content };
 
         setSessions((current) =>
@@ -1443,16 +1386,6 @@ export default function Home() {
               : session,
           ),
         );
-        setStreamingMessages((current) => {
-          if (current[sessionId]?.id !== assistantMessage.id) {
-            return current;
-          }
-
-          const next = { ...current };
-          delete next[sessionId];
-          return next;
-        });
-
         if (conversationSpeechEnabled) {
           void playAssistantMessageAudio({
             message: completedMessage,
@@ -1462,16 +1395,6 @@ export default function Home() {
           });
         }
       } catch (error) {
-        cancelStreamFrame();
-        setStreamingMessages((current) => {
-          if (current[sessionId]?.id !== assistantMessage.id) {
-            return current;
-          }
-
-          const next = { ...current };
-          delete next[sessionId];
-          return next;
-        });
         if (!isAbortError(error) && isCurrentRequest(requestKey, request.id)) {
           setChatErrorForSession(
             sessionId,
@@ -1481,7 +1404,6 @@ export default function Home() {
           );
         }
       } finally {
-        cancelStreamFrame();
         finishRequest(requestKey, request.id);
       }
     },
@@ -2051,15 +1973,6 @@ ${contextText}
         index: sessionIndex,
         wasActive,
       });
-      setStreamingMessages((current) => {
-        if (!current[sessionId]) {
-          return current;
-        }
-
-        const next = { ...current };
-        delete next[sessionId];
-        return next;
-      });
       setChatErrors((current) => updateSessionError(current, sessionId, null));
       setCoachErrors((current) => updateSessionError(current, sessionId, null));
 
@@ -2331,7 +2244,6 @@ ${contextText}
           <ChatPanel
             sessionId={activeSessionId}
             messages={messages}
-            streamingMessage={streamingMessage}
             scenario={scenario}
             scenarioPresets={effectiveScenarioPresets}
             speechEnabled={speechEnabled}
@@ -2380,7 +2292,6 @@ ${contextText}
             <ChatPanel
               sessionId={activeSessionId}
               messages={messages}
-              streamingMessage={streamingMessage}
               scenario={scenario}
               scenarioPresets={effectiveScenarioPresets}
               speechEnabled={speechEnabled}

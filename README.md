@@ -28,9 +28,9 @@ The default models are:
 
 Chat and coaching intentionally share Luna as the fast, cost-efficient default.
 TTS stays on a dedicated speech model because Luna produces text, not audio.
-All built-in GPT-5.6 requests use `reasoning.effort: medium`. Chat Partner
-responses stream into the conversation as they arrive; final messages are saved
-only after the stream completes.
+All built-in GPT-5.6 requests use `reasoning.effort: medium`. Chat Partner uses
+streaming transport in the background, then reveals and saves one stable reply
+after the stream completes.
 
 The model fields are editable and saved locally. Opening Settings lazily loads
 OpenRouter's current all-modality catalog once, separates text from dedicated

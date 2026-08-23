@@ -29,7 +29,6 @@ import { reportLocalStorageFailure } from "@/hooks/use-local-storage-state";
 type ChatPanelProps = {
   sessionId: string | null;
   messages: ChatMessage[];
-  streamingMessage: ChatMessage | null;
   scenario: string;
   scenarioPresets: ScenarioPreset[];
   speechEnabled: boolean;
@@ -70,7 +69,6 @@ function persistDraft(storageKey: string, value: string) {
 export const ChatPanel = memo(function ChatPanel({
   sessionId,
   messages,
-  streamingMessage,
   scenario,
   scenarioPresets,
   speechEnabled,
@@ -95,8 +93,7 @@ export const ChatPanel = memo(function ChatPanel({
   const streamRef = useRef<HTMLDivElement | null>(null);
   const previousMessageCountRef = useRef(messages.length);
   const previousLastMessageIdRef = useRef<string | null>(null);
-  const lastMessageId = streamingMessage?.id ?? messages.at(-1)?.id ?? null;
-  const streamingContentLength = streamingMessage?.content.length ?? 0;
+  const lastMessageId = messages.at(-1)?.id ?? null;
 
   useEffect(() => {
     const stream = streamRef.current;
@@ -133,7 +130,7 @@ export const ChatPanel = memo(function ChatPanel({
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [isPending, lastMessageId, messages.length, streamingContentLength]);
+  }, [isPending, lastMessageId, messages.length]);
 
   return (
     <section className="chat-panel relative isolate flex h-full min-h-0 flex-col lg:border-r">
@@ -223,20 +220,7 @@ export const ChatPanel = memo(function ChatPanel({
                 onEditRequestComplete={onEditRequestComplete}
               />
             ))}
-            {streamingMessage ? (
-              <MessageBubble
-                message={streamingMessage}
-                hideAssistantText={hideAssistantText}
-                isSpeechPending={false}
-                isPlaying={false}
-                isStreaming
-                canEdit={false}
-                editRequest={null}
-                onPlayAssistantMessage={onPlayAssistantMessage}
-                onEditUserMessage={onEditUserMessage}
-                onEditRequestComplete={onEditRequestComplete}
-              />
-            ) : isPending ? (
+            {isPending ? (
               <article className="animate-gentle-pop flex gap-3">
                 <div className="assistant-avatar mt-1 flex size-8 shrink-0 items-center justify-center text-white">
                   <Sparkles className="size-4" aria-hidden="true" />
@@ -451,7 +435,6 @@ const MessageBubble = memo(function MessageBubble({
   hideAssistantText,
   isSpeechPending,
   isPlaying,
-  isStreaming = false,
   canEdit,
   editRequest,
   onPlayAssistantMessage,
@@ -462,7 +445,6 @@ const MessageBubble = memo(function MessageBubble({
   hideAssistantText: boolean;
   isSpeechPending: boolean;
   isPlaying: boolean;
-  isStreaming?: boolean;
   canEdit: boolean;
   editRequest: MessageEditRequest | null;
   onPlayAssistantMessage: (message: ChatMessage) => void;
@@ -625,25 +607,13 @@ const MessageBubble = memo(function MessageBubble({
           </div>
         ) : (
           <p
-            aria-live={isStreaming ? "polite" : undefined}
-            aria-busy={isStreaming || undefined}
             className={`whitespace-pre-wrap break-words ${
               isAssistant && hideAssistantText
                 ? "select-none text-transparent [text-shadow:0_0_10px_rgba(63,63,70,0.55)]"
                 : ""
             }`}
           >
-            {message.content || isStreaming ? (
-              <>
-                {message.content}
-                {isStreaming ? (
-                  <span
-                    className="streaming-caret ml-0.5 inline-block h-[1em] w-0.5 translate-y-[0.12em] rounded-full bg-[#6558f5]"
-                    aria-hidden="true"
-                  />
-                ) : null}
-              </>
-            ) : null}
+            {message.content}
           </p>
         )}
         {!isAssistant && canEdit && !isEditing ? (
@@ -660,7 +630,7 @@ const MessageBubble = memo(function MessageBubble({
             <Pencil className="size-3.5" aria-hidden="true" />
           </button>
         ) : null}
-        {isAssistant && !isStreaming ? (
+        {isAssistant ? (
           <button
             className={`smooth-transition absolute right-2 top-2 flex size-7 items-center justify-center rounded-lg border focus:outline-none focus:ring-4 ${
               isPlaying

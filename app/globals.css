@@ -185,10 +185,6 @@ select {
   animation-delay: 300ms;
 }
 
-.streaming-caret {
-  animation: breathe 850ms ease-in-out infinite;
-}
-
 .shine-sweep {
   overflow: hidden;
   position: relative;

@@ -556,7 +556,7 @@ export async function streamOpenRouterFromBrowser({
   timeoutMs = DEFAULT_TEXT_TIMEOUT_MS,
   onDelta,
 }: Omit<OpenRouterChatRequest, "responseFormat"> & {
-  onDelta: (delta: string, content: string) => void;
+  onDelta?: (delta: string, content: string) => void;
 }) {
   validateChatRequest({ apiKey, model, messages, temperature });
   const request = createRequestContext(signal, timeoutMs);
@@ -608,7 +608,7 @@ export async function streamOpenRouterFromBrowser({
 
       if (parsed.delta) {
         content += parsed.delta;
-        onDelta(parsed.delta, content);
+        onDelta?.(parsed.delta, content);
       }
     };
 
