@@ -2,6 +2,29 @@
 
 import { useEffect, useRef, useState } from "react";
 
+export const LOCAL_STORAGE_ERROR_EVENT =
+  "english-shadow-coach:local-storage-error";
+
+export type LocalStorageFailure = {
+  key: string;
+  operation: "read" | "write" | "remove";
+};
+
+export function reportLocalStorageFailure(
+  key: string,
+  operation: LocalStorageFailure["operation"],
+) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent<LocalStorageFailure>(LOCAL_STORAGE_ERROR_EVENT, {
+      detail: { key, operation },
+    }),
+  );
+}
+
 export function useLocalStorageState<T>(key: string, initialValue: T) {
   const initialValueRef = useRef(initialValue);
   const [value, setValue] = useState<T>(initialValue);
@@ -22,6 +45,7 @@ export function useLocalStorageState<T>(key: string, initialValue: T) {
         }
       } catch {
         setValue(initialValueRef.current);
+        reportLocalStorageFailure(key, "read");
       } finally {
         setHydrated(true);
       }
@@ -37,11 +61,21 @@ export function useLocalStorageState<T>(key: string, initialValue: T) {
       return;
     }
 
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // localStorage can be unavailable in private browsing or quota-limited states.
-    }
+    const persist = () => {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      } catch {
+        reportLocalStorageFailure(key, "write");
+      }
+    };
+    const timer = window.setTimeout(persist, 120);
+
+    window.addEventListener("pagehide", persist, { once: true });
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pagehide", persist);
+    };
   }, [hydrated, key, value]);
 
   return [value, setValue, hydrated] as const;

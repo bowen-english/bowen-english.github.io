@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
@@ -21,10 +22,16 @@ import { ChatPanel } from "@/components/chat-panel";
 import { CoachPanel } from "@/components/coach-panel";
 import { HistoryPanel } from "@/components/history-panel";
 import { SettingsPanel } from "@/components/settings-panel";
-import { useLocalStorageState } from "@/hooks/use-local-storage-state";
 import {
-  deleteCachedAudioBlob,
+  LOCAL_STORAGE_ERROR_EVENT,
+  useLocalStorageState,
+  type LocalStorageFailure,
+} from "@/hooks/use-local-storage-state";
+import { useRequestRegistry } from "@/hooks/use-request-registry";
+import {
+  deleteCachedAudioByMessageIds,
   getCachedAudioBlob,
+  pruneAudioCache,
   putCachedAudioBlob,
 } from "@/lib/audio-cache";
 import {
@@ -32,13 +39,20 @@ import {
   callOpenRouterSpeechFromBrowser,
   fetchOpenRouterCreditSummaryFromBrowser,
   fetchOpenRouterModelsFromBrowser,
+  isAbortError,
   isGeminiTtsModel,
+  streamOpenRouterFromBrowser,
+  type BrowserOpenRouterMessage,
   type OpenRouterCreditSummary,
 } from "@/lib/openrouter-browser";
 import {
   CHAT_PARTNER_SYSTEM_PROMPT,
   SILENT_COACH_SYSTEM_PROMPT,
 } from "@/lib/prompts";
+import {
+  parseCoachResponse,
+  parseVoiceChoice,
+} from "@/lib/structured-responses";
 import {
   DEFAULT_SCENARIO_PRESETS,
   DEFAULT_SETTINGS,
@@ -60,6 +74,12 @@ const SESSIONS_STORAGE_KEY = "english-shadow-coach.sessions";
 const CURRENT_SESSION_STORAGE_KEY = "english-shadow-coach.current-session-id";
 const SETTINGS_STORAGE_KEY = "english-shadow-coach.settings";
 const SCENARIO_PRESETS_STORAGE_KEY = "english-shadow-coach.scenario-presets";
+const NEW_SESSION_ERROR_KEY = "__new-session__";
+const CHAT_MAX_COMPLETION_TOKENS = 2_048;
+const COACH_MAX_COMPLETION_TOKENS = 3_072;
+const SHORT_TASK_MAX_COMPLETION_TOKENS = 2_048;
+const MAX_IN_MEMORY_AUDIO_URLS = 24;
+const DESKTOP_MEDIA_QUERY = "(min-width: 1024px)";
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_FEEDBACK: CoachFeedback[] = [];
 const LEGACY_DEFAULT_CHAT_MODELS = new Set([
@@ -92,8 +112,13 @@ const LEGACY_DEFAULT_TTS_VOICES = new Set([
   "verse",
 ]);
 
-type CoachResponse = Omit<CoachFeedback, "id" | "createdAt">;
 type MobileView = "chat" | "coach" | "history";
+type SessionErrors = Record<string, string>;
+type DeletedSessionNotice = {
+  session: ConversationSession;
+  index: number;
+  wasActive: boolean;
+};
 const TTS_VOICE_BY_LOWERCASE = new Map(
   TTS_VOICE_OPTIONS.map((voice) => [voice.value.toLowerCase(), voice.value]),
 );
@@ -103,6 +128,45 @@ const TTS_VOICE_CASTING_GUIDE = TTS_VOICE_OPTIONS.map(
 
 function makeId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+}
+
+function subscribeToDesktopLayout(onChange: () => void) {
+  const media = window.matchMedia(DESKTOP_MEDIA_QUERY);
+
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+}
+
+function getDesktopLayoutSnapshot() {
+  return window.matchMedia(DESKTOP_MEDIA_QUERY).matches;
+}
+
+function getServerDesktopLayoutSnapshot() {
+  return false;
+}
+
+function getRequestKey(kind: "chat" | "coach", sessionId: string) {
+  return `${kind}:${sessionId}`;
+}
+
+function updateSessionError(
+  current: SessionErrors,
+  sessionId: string,
+  message: string | null,
+) {
+  if (!message) {
+    if (!current[sessionId]) {
+      return current;
+    }
+
+    const next = { ...current };
+    delete next[sessionId];
+    return next;
+  }
+
+  return current[sessionId] === message
+    ? current
+    : { ...current, [sessionId]: message };
 }
 
 function getSessionTitle(messages: ChatMessage[]) {
@@ -308,18 +372,6 @@ function pickCoachContext({
   return messages.slice(startIndex ?? 0);
 }
 
-function extractJsonObject(text: string) {
-  const trimmed = text.trim();
-  const firstBrace = trimmed.indexOf("{");
-  const lastBrace = trimmed.lastIndexOf("}");
-
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    return trimmed;
-  }
-
-  return trimmed.slice(firstBrace, lastBrace + 1);
-}
-
 function getValidTtsVoice(value: string | undefined, fallback: string) {
   const normalized = value?.trim().toLowerCase();
   return (
@@ -329,16 +381,30 @@ function getValidTtsVoice(value: string | undefined, fallback: string) {
   );
 }
 
-function normalizeTtsVoiceChoice(raw: string, fallback: string) {
-  try {
-    const parsed = JSON.parse(extractJsonObject(raw)) as { voice?: unknown };
-    return getValidTtsVoice(
-      typeof parsed.voice === "string" ? parsed.voice : undefined,
-      fallback,
-    );
-  } catch {
-    return getValidTtsVoice(undefined, fallback);
+function getConfiguredTtsVoice({
+  model,
+  value,
+  availableModels,
+  fallback,
+}: {
+  model: string;
+  value: string | undefined;
+  availableModels: OpenRouterModel[];
+  fallback: string;
+}) {
+  if (isGeminiTtsModel(model)) {
+    return getValidTtsVoice(value, fallback);
   }
+
+  const configuredVoice = value?.trim() ?? "";
+  const supportedVoices =
+    availableModels.find((availableModel) => availableModel.id === model.trim())
+      ?.supportedVoices ?? [];
+  const matchedVoice = supportedVoices.find(
+    (voice) => voice.toLowerCase() === configuredVoice.toLowerCase(),
+  );
+
+  return (matchedVoice ?? supportedVoices[0] ?? configuredVoice) || fallback;
 }
 
 function buildTtsVoiceCastingPrompt({
@@ -385,27 +451,59 @@ function getExplanationLanguageName(language: CoachExplanationLanguage) {
   return language === "zh" ? "Chinese (Simplified)" : "English";
 }
 
-function normalizeCoachResponse(raw: string, messageId: string): CoachResponse {
-  const parsed = JSON.parse(extractJsonObject(raw)) as Partial<CoachResponse>;
-  const severity =
-    parsed.severity === "none" ||
-    parsed.severity === "minor" ||
-    parsed.severity === "major"
-      ? parsed.severity
-      : "minor";
-  const explanation = parsed.explanation ?? parsed.explanationZh ?? "";
+async function requestCoachResponse({
+  apiKey,
+  model,
+  messages,
+  latestUserMessage,
+  routingSessionId,
+  signal,
+}: {
+  apiKey: string;
+  model: string;
+  messages: BrowserOpenRouterMessage[];
+  latestUserMessage: Pick<ChatMessage, "id" | "content">;
+  routingSessionId: string;
+  signal: AbortSignal;
+}) {
+  const callCoach = (requestMessages: BrowserOpenRouterMessage[]) =>
+    callOpenRouterFromBrowser({
+      apiKey,
+      model,
+      temperature: 0.2,
+      responseFormat: { type: "json_object" },
+      maxCompletionTokens: COACH_MAX_COMPLETION_TOKENS,
+      sessionId: `coach-${routingSessionId}`,
+      signal,
+      messages: requestMessages,
+    });
+  const raw = await callCoach(messages);
 
-  return {
-    messageId,
-    original: parsed.original ?? "",
-    corrected: parsed.corrected ?? "",
-    natural: parsed.natural ?? "",
-    issues: Array.isArray(parsed.issues) ? parsed.issues : [],
-    explanation,
-    pattern: parsed.pattern ?? "",
-    severity,
-  };
+  try {
+    return parseCoachResponse({
+      raw,
+      messageId: latestUserMessage.id,
+      original: latestUserMessage.content,
+    });
+  } catch {
+    const repairedRaw = await callCoach([
+      ...messages,
+      { role: "assistant", content: raw },
+      {
+        role: "user",
+        content:
+          "Your previous JSON could not be validated. Return one complete JSON object only. Required fields: original, corrected, natural, issues (string array), explanation, pattern, severity (none, minor, or major).",
+      },
+    ]);
+
+    return parseCoachResponse({
+      raw: repairedRaw,
+      messageId: latestUserMessage.id,
+      original: latestUserMessage.content,
+    });
+  }
 }
+
 
 function getAssistantAudioCacheKey({
   messageId,
@@ -420,6 +518,11 @@ function getAssistantAudioCacheKey({
 }
 
 export default function Home() {
+  const isDesktopLayout = useSyncExternalStore(
+    subscribeToDesktopLayout,
+    getDesktopLayoutSnapshot,
+    getServerDesktopLayoutSnapshot,
+  );
   const [sessions, setSessions, sessionsHydrated] = useLocalStorageState<
     ConversationSession[]
   >(SESSIONS_STORAGE_KEY, []);
@@ -455,20 +558,23 @@ export default function Home() {
       return migrated;
     });
   }, [settingsHydrated, setSettings]);
-  const [draft, setDraft] = useLocalStorageState(
-    "english-shadow-coach.draft",
-    "",
-  );
-  const [chatPending, setChatPending] = useState(false);
-  const [coachPending, setCoachPending] = useState(false);
-  const [chatError, setChatError] = useState<string | null>(null);
-  const [coachError, setCoachError] = useState<string | null>(null);
+  const [streamingMessages, setStreamingMessages] = useState<
+    Record<string, ChatMessage>
+  >({});
+  const [chatErrors, setChatErrors] = useState<SessionErrors>({});
+  const [coachErrors, setCoachErrors] = useState<SessionErrors>({});
   const [models, setModels] = useState<OpenRouterModel[]>([]);
+  const [speechModels, setSpeechModels] = useState<OpenRouterModel[]>([]);
   const [modelsSource, setModelsSource] = useState<"user" | "public" | null>(
     null,
   );
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [modelTestLoading, setModelTestLoading] = useState(false);
+  const [modelTestMessage, setModelTestMessage] = useState<{
+    status: "success" | "error";
+    message: string;
+  } | null>(null);
   const [creditSummary, setCreditSummary] =
     useState<OpenRouterCreditSummary | null>(null);
   const [creditLoading, setCreditLoading] = useState(false);
@@ -483,99 +589,279 @@ export default function Home() {
   const [rebuttingFeedbackId, setRebuttingFeedbackId] = useState<string | null>(
     null,
   );
+  const [deletedSession, setDeletedSession] =
+    useState<DeletedSessionNotice | null>(null);
+  const [storageWarning, setStorageWarning] =
+    useState<LocalStorageFailure | null>(null);
   const audioUrlsRef = useRef(new Map<string, string>());
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const speechControllersRef = useRef(new Map<string, AbortController>());
+  const currentSessionIdRef = useRef(currentSessionId);
+  const playingMessageIdRef = useRef(playingMessageId);
   const creditRequestIdRef = useRef(0);
+  const creditAbortControllerRef = useRef<AbortController | null>(null);
+  const modelRequestIdRef = useRef(0);
+  const modelAbortControllerRef = useRef<AbortController | null>(null);
+  const modelTestAbortControllerRef = useRef<AbortController | null>(null);
   const sessionsRef = useRef(sessions);
   const voiceSelectionPromisesRef = useRef(
     new Map<string, Promise<string>>(),
   );
+  const {
+    activeRequestIds,
+    startRequest,
+    isCurrentRequest,
+    finishRequest,
+    abortRequest,
+  } = useRequestRegistry();
 
   useEffect(() => {
     sessionsRef.current = sessions;
   }, [sessions]);
+
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    playingMessageIdRef.current = playingMessageId;
+  }, [playingMessageId]);
+
+  useEffect(() => {
+    const handleStorageFailure = (event: Event) => {
+      setStorageWarning(
+        (event as CustomEvent<LocalStorageFailure>).detail ?? {
+          key: "unknown",
+          operation: "write",
+        },
+      );
+    };
+
+    window.addEventListener(LOCAL_STORAGE_ERROR_EVENT, handleStorageFailure);
+
+    return () => {
+      window.removeEventListener(
+        LOCAL_STORAGE_ERROR_EVENT,
+        handleStorageFailure,
+      );
+    };
+  }, []);
 
   const activeSession =
     sessions.find((session) => session.id === currentSessionId) ??
     sessions[0] ??
     null;
   const activeSessionId = activeSession?.id ?? null;
+  const activeErrorKey = activeSessionId ?? NEW_SESSION_ERROR_KEY;
   const messages = activeSession?.messages ?? EMPTY_MESSAGES;
+  const streamingMessage = activeSessionId
+    ? streamingMessages[activeSessionId] ?? null
+    : null;
   const feedback = activeSession?.feedback ?? EMPTY_FEEDBACK;
   const scenario = activeSession?.scenario ?? "";
   const conversationVoice = isGeminiTtsModel(effectiveSettings.ttsModel)
     ? activeSession?.ttsVoice ?? null
-    : effectiveSettings.ttsVoice;
+    : getConfiguredTtsVoice({
+        model: effectiveSettings.ttsModel,
+        value: effectiveSettings.ttsVoice,
+        availableModels: speechModels,
+        fallback: DEFAULT_SETTINGS.ttsVoice,
+      });
   const speechEnabled = Boolean(activeSession?.speechEnabled);
   const hideAssistantText = Boolean(activeSession?.hideAssistantText);
   const practiceFeedbackId = messageEditRequest?.feedbackId ?? null;
+  const chatPending = activeSessionId
+    ? Boolean(activeRequestIds[getRequestKey("chat", activeSessionId)])
+    : false;
+  const coachPending = activeSessionId
+    ? Boolean(activeRequestIds[getRequestKey("coach", activeSessionId)])
+    : false;
+  const chatError = chatErrors[activeErrorKey] ?? null;
+  const coachError = coachErrors[activeErrorKey] ?? null;
 
-  const loadPublicModels = useCallback(async () => {
-    setModelsLoading(true);
-    setModelsError(null);
+  const setChatErrorForSession = useCallback(
+    (sessionId: string, message: string | null) => {
+      setChatErrors((current) => updateSessionError(current, sessionId, message));
+    },
+    [],
+  );
 
-    try {
-      const result = await fetchOpenRouterModelsFromBrowser("");
+  const setCoachErrorForSession = useCallback(
+    (sessionId: string, message: string | null) => {
+      setCoachErrors((current) => updateSessionError(current, sessionId, message));
+    },
+    [],
+  );
 
-      setModels(result.models);
-      setModelsSource(result.source);
-    } catch (error) {
-      setModelsError(
-        error instanceof Error
-          ? error.message
-          : "Failed to load OpenRouter models.",
-      );
-    } finally {
-      setModelsLoading(false);
-    }
-  }, []);
+  const loadModels = useCallback(async (force = false) => {
+    const apiKey = effectiveSettings.openRouterApiKey.trim();
+    const requestId = ++modelRequestIdRef.current;
+    const controller = new AbortController();
 
-  const refreshModels = useCallback(async () => {
+    modelAbortControllerRef.current?.abort();
+    modelAbortControllerRef.current = controller;
     setModelsLoading(true);
     setModelsError(null);
 
     try {
       const result = await fetchOpenRouterModelsFromBrowser(
-        effectiveSettings.openRouterApiKey,
+        apiKey.length >= 20 ? apiKey : "",
+        { force, signal: controller.signal },
       );
 
-      setModels(result.models);
-      setModelsSource(result.source);
-      setModelsError("warning" in result ? result.warning ?? null : null);
+      if (modelRequestIdRef.current === requestId) {
+        setModels(result.models);
+        setSpeechModels(result.speechModels);
+        setModelsSource(result.source);
+        setModelsError("warning" in result ? result.warning ?? null : null);
+      }
     } catch (error) {
-      setModelsError(
-        error instanceof Error
-          ? error.message
-          : "Failed to load OpenRouter models.",
-      );
+      if (!isAbortError(error) && modelRequestIdRef.current === requestId) {
+        setModelsError(
+          error instanceof Error
+            ? error.message
+            : "Failed to load OpenRouter models.",
+        );
+      }
     } finally {
-      setModelsLoading(false);
+      if (modelRequestIdRef.current === requestId) {
+        setModelsLoading(false);
+      }
+      if (modelAbortControllerRef.current === controller) {
+        modelAbortControllerRef.current = null;
+      }
     }
   }, [effectiveSettings.openRouterApiKey]);
+
+  const refreshModels = useCallback(() => {
+    void loadModels(true);
+  }, [loadModels]);
+
+  const testSelectedModels = useCallback(async () => {
+    const apiKey = effectiveSettings.openRouterApiKey.trim();
+
+    if (apiKey.length < 20) {
+      setModelTestMessage({
+        status: "error",
+        message: "Add a valid OpenRouter API key before testing models.",
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    modelTestAbortControllerRef.current?.abort();
+    modelTestAbortControllerRef.current = controller;
+    setModelTestLoading(true);
+    setModelTestMessage(null);
+
+    try {
+      await Promise.all([
+        streamOpenRouterFromBrowser({
+          apiKey,
+          model: effectiveSettings.chatModel,
+          messages: [
+            {
+              role: "system",
+              content: "Reply with the single word OK.",
+            },
+            { role: "user", content: "Connection test" },
+          ],
+          maxCompletionTokens: SHORT_TASK_MAX_COMPLETION_TOKENS,
+          signal: controller.signal,
+          onDelta: () => undefined,
+        }),
+        callOpenRouterFromBrowser({
+          apiKey,
+          model: effectiveSettings.coachModel,
+          messages: [
+            {
+              role: "system",
+              content: 'Return only this JSON object: {"ok":true}',
+            },
+            { role: "user", content: "Connection test" },
+          ],
+          responseFormat: { type: "json_object" },
+          maxCompletionTokens: SHORT_TASK_MAX_COMPLETION_TOKENS,
+          signal: controller.signal,
+        }),
+        callOpenRouterSpeechFromBrowser({
+          apiKey,
+          model: effectiveSettings.ttsModel,
+          voice: getConfiguredTtsVoice({
+            model: effectiveSettings.ttsModel,
+            value: effectiveSettings.ttsVoice,
+            availableModels: speechModels,
+            fallback: DEFAULT_SETTINGS.ttsVoice,
+          }),
+          input: "Hello.",
+          signal: controller.signal,
+        }),
+      ]);
+
+      if (modelTestAbortControllerRef.current === controller) {
+        setModelTestMessage({
+          status: "success",
+          message: "Chat streaming, Coach JSON, and TTS all responded successfully.",
+        });
+      }
+    } catch (error) {
+      if (
+        !isAbortError(error) &&
+        modelTestAbortControllerRef.current === controller
+      ) {
+        setModelTestMessage({
+          status: "error",
+          message:
+            error instanceof Error ? error.message : "Model test failed.",
+        });
+      }
+    } finally {
+      if (modelTestAbortControllerRef.current === controller) {
+        modelTestAbortControllerRef.current = null;
+        setModelTestLoading(false);
+      }
+    }
+  }, [
+    effectiveSettings.chatModel,
+    effectiveSettings.coachModel,
+    effectiveSettings.openRouterApiKey,
+    effectiveSettings.ttsModel,
+    effectiveSettings.ttsVoice,
+    speechModels,
+  ]);
 
   const refreshCredits = useCallback(async () => {
     const apiKey = effectiveSettings.openRouterApiKey.trim();
     const requestId = ++creditRequestIdRef.current;
 
+    creditAbortControllerRef.current?.abort();
+
     if (apiKey.length < 20) {
+      creditAbortControllerRef.current = null;
       setCreditSummary(null);
       setCreditError(null);
       setCreditLoading(false);
       return;
     }
 
+    const controller = new AbortController();
+    creditAbortControllerRef.current = controller;
     setCreditLoading(true);
     setCreditError(null);
 
     try {
-      const summary =
-        await fetchOpenRouterCreditSummaryFromBrowser(apiKey);
+      const summary = await fetchOpenRouterCreditSummaryFromBrowser(apiKey, {
+        signal: controller.signal,
+      });
 
       if (creditRequestIdRef.current === requestId) {
         setCreditSummary(summary);
       }
     } catch (error) {
-      if (creditRequestIdRef.current === requestId) {
+      if (
+        !isAbortError(error) &&
+        creditRequestIdRef.current === requestId
+      ) {
         setCreditSummary(null);
         setCreditError(
           error instanceof Error
@@ -587,6 +873,9 @@ export default function Home() {
       if (creditRequestIdRef.current === requestId) {
         setCreditLoading(false);
       }
+      if (creditAbortControllerRef.current === controller) {
+        creditAbortControllerRef.current = null;
+      }
     }
   }, [effectiveSettings.openRouterApiKey]);
 
@@ -596,13 +885,17 @@ export default function Home() {
     }
 
     const timer = window.setTimeout(() => {
+      void loadModels(false);
       void refreshCredits();
     }, 450);
 
     return () => {
       window.clearTimeout(timer);
+      modelAbortControllerRef.current?.abort();
+      creditAbortControllerRef.current?.abort();
+      modelTestAbortControllerRef.current?.abort();
     };
-  }, [refreshCredits, settingsOpen]);
+  }, [loadModels, refreshCredits, settingsOpen]);
 
   useEffect(() => {
     if (!sessionsHydrated || !currentSessionHydrated) {
@@ -660,23 +953,20 @@ export default function Home() {
   ]);
 
   useEffect(() => {
-    let cancelled = false;
+    const audioUrls = audioUrlsRef.current;
+    const speechControllers = speechControllersRef.current;
 
-    queueMicrotask(() => {
-      if (!cancelled) {
-        void loadPublicModels();
-      }
+    void pruneAudioCache().catch(() => {
+      // IndexedDB is optional; speech can still work without persistent cache.
     });
 
     return () => {
-      cancelled = true;
-    };
-  }, [loadPublicModels]);
-
-  useEffect(() => {
-    const audioUrls = audioUrlsRef.current;
-
-    return () => {
+      modelAbortControllerRef.current?.abort();
+      modelTestAbortControllerRef.current?.abort();
+      creditAbortControllerRef.current?.abort();
+      speechControllers.forEach((controller) => controller.abort());
+      speechControllers.clear();
+      audioPlayerRef.current?.pause();
       audioUrls.forEach((audioUrl) => {
         URL.revokeObjectURL(audioUrl);
       });
@@ -711,20 +1001,128 @@ export default function Home() {
     [setSessions],
   );
 
+  const stopAudioPlayback = useCallback(() => {
+    const player = audioPlayerRef.current;
+
+    if (player) {
+      player.pause();
+      player.currentTime = 0;
+      audioPlayerRef.current = null;
+    }
+
+    setPlayingMessageId(null);
+  }, []);
+
+  const abortAllSpeechRequests = useCallback(() => {
+    speechControllersRef.current.forEach((controller) => controller.abort());
+    speechControllersRef.current.clear();
+    setSpeechPendingIds([]);
+  }, []);
+
+  const rememberAudioUrl = useCallback((cacheKey: string, audioUrl: string) => {
+    const urls = audioUrlsRef.current;
+
+    urls.delete(cacheKey);
+    urls.set(cacheKey, audioUrl);
+
+    for (const [storedKey, storedUrl] of urls) {
+      if (urls.size <= MAX_IN_MEMORY_AUDIO_URLS) {
+        break;
+      }
+
+      const playingMessageId = playingMessageIdRef.current;
+
+      if (
+        playingMessageId &&
+        storedKey.startsWith(`assistant-audio:${playingMessageId}:`)
+      ) {
+        continue;
+      }
+
+      URL.revokeObjectURL(storedUrl);
+      urls.delete(storedKey);
+    }
+  }, []);
+
+  const removeAudioForMessageIds = useCallback(
+    (messageIds: Iterable<string>) => {
+      const ids = new Set(messageIds);
+
+      if (ids.size === 0) {
+        return;
+      }
+
+      ids.forEach((messageId) => {
+        speechControllersRef.current.get(messageId)?.abort();
+        speechControllersRef.current.delete(messageId);
+      });
+      setSpeechPendingIds((current) =>
+        current.filter((messageId) => !ids.has(messageId)),
+      );
+
+      audioUrlsRef.current.forEach((audioUrl, cacheKey) => {
+        const matches = [...ids].some((messageId) =>
+          cacheKey.startsWith(`assistant-audio:${messageId}:`),
+        );
+
+        if (matches) {
+          URL.revokeObjectURL(audioUrl);
+          audioUrlsRef.current.delete(cacheKey);
+        }
+      });
+
+      if (
+        playingMessageIdRef.current &&
+        ids.has(playingMessageIdRef.current)
+      ) {
+        stopAudioPlayback();
+      }
+
+      void deleteCachedAudioByMessageIds(ids).catch(() => {
+        // Cache cleanup is best effort; the LRU limit will remove leftovers.
+      });
+    },
+    [stopAudioPlayback],
+  );
+
+  useEffect(() => {
+    if (!deletedSession) {
+      return;
+    }
+
+    const deletedSessionId = deletedSession.session.id;
+    const timer = window.setTimeout(() => {
+      removeAudioForMessageIds(
+        deletedSession.session.messages
+          .filter((message) => message.role === "assistant")
+          .map((message) => message.id),
+      );
+      setDeletedSession((current) =>
+        current?.session.id === deletedSessionId ? null : current,
+      );
+    }, 7_000);
+
+    return () => window.clearTimeout(timer);
+  }, [deletedSession, removeAudioForMessageIds]);
+
   const resolveConversationVoice = useCallback(
     async ({
       sessionId,
       conversation,
       conversationScenario,
+      signal,
     }: {
       sessionId: string;
       conversation: ChatMessage[];
       conversationScenario: string;
+      signal: AbortSignal;
     }) => {
-      const fallbackVoice = getValidTtsVoice(
-        effectiveSettings.ttsVoice,
-        DEFAULT_SETTINGS.ttsVoice,
-      );
+      const fallbackVoice = getConfiguredTtsVoice({
+        model: effectiveSettings.ttsModel,
+        value: effectiveSettings.ttsVoice,
+        availableModels: speechModels,
+        fallback: DEFAULT_SETTINGS.ttsVoice,
+      });
 
       if (!isGeminiTtsModel(effectiveSettings.ttsModel)) {
         return fallbackVoice;
@@ -762,6 +1160,9 @@ export default function Home() {
             model: effectiveSettings.coachModel,
             temperature: 0.2,
             responseFormat: { type: "json_object" },
+            maxCompletionTokens: SHORT_TASK_MAX_COMPLETION_TOKENS,
+            sessionId: `voice-${sessionId}`,
+            signal,
             messages: [
               {
                 role: "system",
@@ -779,7 +1180,11 @@ export default function Home() {
             ],
           });
 
-          selectedVoice = normalizeTtsVoiceChoice(raw, fallbackVoice);
+          selectedVoice = parseVoiceChoice({
+            raw,
+            allowedVoices: TTS_VOICE_OPTIONS.map((voice) => voice.value),
+            fallback: fallbackVoice,
+          });
         } catch {
           // Voice casting is optional; speech should still work with the fallback.
         }
@@ -801,6 +1206,7 @@ export default function Home() {
       effectiveSettings.openRouterApiKey,
       effectiveSettings.ttsModel,
       effectiveSettings.ttsVoice,
+      speechModels,
       updateSession,
     ],
   );
@@ -829,6 +1235,9 @@ export default function Home() {
         return;
       }
 
+      speechControllersRef.current.get(message.id)?.abort();
+      const controller = new AbortController();
+      speechControllersRef.current.set(message.id, controller);
       setSpeechError(null);
       setSpeechPendingIds((current) =>
         current.includes(message.id) ? current : [...current, message.id],
@@ -839,7 +1248,13 @@ export default function Home() {
           sessionId,
           conversation,
           conversationScenario,
+          signal: controller.signal,
         });
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
         const cacheKey = getAssistantAudioCacheKey({
           messageId: message.id,
           model: effectiveSettings.ttsModel,
@@ -847,8 +1262,10 @@ export default function Home() {
         });
         let audioUrl = audioUrlsRef.current.get(cacheKey);
 
-        if (!audioUrl) {
-          let audioBlob = await getCachedAudioBlob(cacheKey);
+        if (audioUrl) {
+          rememberAudioUrl(cacheKey, audioUrl);
+        } else {
+          let audioBlob = await getCachedAudioBlob(cacheKey).catch(() => null);
 
           if (!audioBlob) {
             audioBlob = await callOpenRouterSpeechFromBrowser({
@@ -858,15 +1275,25 @@ export default function Home() {
               input: message.content,
               instructions:
                 "Embody the selected voice naturally. Speak in clear conversational English and keep the delivery easy to follow for language practice.",
+              signal: controller.signal,
             });
-            void putCachedAudioBlob(cacheKey, audioBlob);
+            void putCachedAudioBlob(cacheKey, audioBlob).catch(() => {
+              // Playback can continue even when persistent caching is unavailable.
+            });
           }
 
           audioUrl = URL.createObjectURL(audioBlob);
-          audioUrlsRef.current.set(cacheKey, audioUrl);
+          rememberAudioUrl(cacheKey, audioUrl);
         }
 
-        audioPlayerRef.current?.pause();
+        if (
+          controller.signal.aborted ||
+          currentSessionIdRef.current !== sessionId
+        ) {
+          return;
+        }
+
+        stopAudioPlayback();
 
         const player = new Audio(audioUrl);
         audioPlayerRef.current = player;
@@ -888,19 +1315,26 @@ export default function Home() {
         setPlayingMessageId((current) =>
           current === message.id ? null : current,
         );
-        setSpeechError(
-          error instanceof Error ? error.message : "Audio playback failed.",
-        );
+        if (!isAbortError(error)) {
+          setSpeechError(
+            error instanceof Error ? error.message : "Audio playback failed.",
+          );
+        }
       } finally {
-        setSpeechPendingIds((current) =>
-          current.filter((messageId) => messageId !== message.id),
-        );
+        if (speechControllersRef.current.get(message.id) === controller) {
+          speechControllersRef.current.delete(message.id);
+          setSpeechPendingIds((current) =>
+            current.filter((messageId) => messageId !== message.id),
+          );
+        }
       }
     },
     [
       effectiveSettings.openRouterApiKey,
       effectiveSettings.ttsModel,
+      rememberAudioUrl,
       resolveConversationVoice,
+      stopAudioPlayback,
     ],
   );
 
@@ -911,14 +1345,74 @@ export default function Home() {
       conversationScenario: string,
       conversationSpeechEnabled: boolean,
     ) => {
-      setChatPending(true);
-      setChatError(null);
+      const requestKey = getRequestKey("chat", sessionId);
+      const request = startRequest(requestKey);
+
+      setChatErrorForSession(sessionId, null);
+      const assistantMessage: ChatMessage = {
+        id: makeId(),
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+      };
+
+      setStreamingMessages((current) => ({
+        ...current,
+        [sessionId]: assistantMessage,
+      }));
+      let streamFrame: number | null = null;
+      let pendingStreamedContent = "";
+
+      const cancelStreamFrame = () => {
+        if (streamFrame !== null) {
+          window.cancelAnimationFrame(streamFrame);
+          streamFrame = null;
+        }
+      };
+
+      const scheduleStreamUpdate = (streamedContent: string) => {
+        pendingStreamedContent = streamedContent;
+
+        if (streamFrame !== null) {
+          return;
+        }
+
+        streamFrame = window.requestAnimationFrame(() => {
+          streamFrame = null;
+
+          if (!isCurrentRequest(requestKey, request.id)) {
+            return;
+          }
+
+          setStreamingMessages((current) => {
+            const currentMessage = current[sessionId];
+
+            if (!currentMessage || currentMessage.id !== assistantMessage.id) {
+              return current;
+            }
+
+            return {
+              ...current,
+              [sessionId]: {
+                ...currentMessage,
+                content: pendingStreamedContent,
+              },
+            };
+          });
+        });
+      };
 
       try {
-        const content = await callOpenRouterFromBrowser({
+        const content = await streamOpenRouterFromBrowser({
           apiKey: effectiveSettings.openRouterApiKey,
           model: effectiveSettings.chatModel,
           temperature: 0.75,
+          maxCompletionTokens: CHAT_MAX_COMPLETION_TOKENS,
+          sessionId: `chat-${sessionId}`,
+          signal: request.signal,
+          onDelta: (_delta, streamedContent) => {
+            scheduleStreamUpdate(streamedContent);
+          },
           messages: [
             {
               role: "system",
@@ -932,44 +1426,74 @@ export default function Home() {
               .map(({ role, content }) => ({ role, content })),
           ],
         });
-        const assistantMessage: ChatMessage = {
-          id: makeId(),
-          role: "assistant",
-          content,
-          createdAt: new Date().toISOString(),
-        };
+
+        if (!isCurrentRequest(requestKey, request.id)) {
+          return;
+        }
+
+        cancelStreamFrame();
+        const completedMessage = { ...assistantMessage, content };
 
         setSessions((current) =>
           current.map((session) =>
             session.id === sessionId
               ? applySessionPatch(session, {
-                  messages: [...session.messages, assistantMessage],
+                  messages: [...session.messages, completedMessage],
                 })
               : session,
           ),
         );
+        setStreamingMessages((current) => {
+          if (current[sessionId]?.id !== assistantMessage.id) {
+            return current;
+          }
+
+          const next = { ...current };
+          delete next[sessionId];
+          return next;
+        });
 
         if (conversationSpeechEnabled) {
           void playAssistantMessageAudio({
-            message: assistantMessage,
+            message: completedMessage,
             sessionId,
-            conversation: [...conversation, assistantMessage],
+            conversation: [...conversation, completedMessage],
             conversationScenario,
           });
         }
       } catch (error) {
-        setChatError(
-          error instanceof Error ? error.message : "Chat Partner request failed.",
-        );
+        cancelStreamFrame();
+        setStreamingMessages((current) => {
+          if (current[sessionId]?.id !== assistantMessage.id) {
+            return current;
+          }
+
+          const next = { ...current };
+          delete next[sessionId];
+          return next;
+        });
+        if (!isAbortError(error) && isCurrentRequest(requestKey, request.id)) {
+          setChatErrorForSession(
+            sessionId,
+            error instanceof Error
+              ? error.message
+              : "Chat Partner request failed.",
+          );
+        }
       } finally {
-        setChatPending(false);
+        cancelStreamFrame();
+        finishRequest(requestKey, request.id);
       }
     },
     [
       effectiveSettings.chatModel,
       effectiveSettings.openRouterApiKey,
+      finishRequest,
+      isCurrentRequest,
       playAssistantMessageAudio,
       setSessions,
+      setChatErrorForSession,
+      startRequest,
     ],
   );
 
@@ -981,8 +1505,10 @@ export default function Home() {
       conversationScenario: string,
       conversationSpeechEnabled: boolean,
     ) => {
-      setCoachPending(true);
-      setCoachError(null);
+      const requestKey = getRequestKey("coach", sessionId);
+      const request = startRequest(requestKey);
+
+      setCoachErrorForSession(sessionId, null);
 
       try {
         const context = pickCoachContext({
@@ -996,19 +1522,14 @@ export default function Home() {
             return `${speaker}: ${message.content}`;
           })
           .join("\n\n");
-        const raw = await callOpenRouterFromBrowser({
-          apiKey: effectiveSettings.openRouterApiKey,
-          model: effectiveSettings.coachModel,
-          temperature: 0.2,
-          responseFormat: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content: buildCoachSystemPrompt(conversationSpeechEnabled),
-            },
-            {
-              role: "user",
-              content: `
+        const coachMessages: BrowserOpenRouterMessage[] = [
+          {
+            role: "system",
+            content: buildCoachSystemPrompt(conversationSpeechEnabled),
+          },
+          {
+            role: "user",
+            content: `
 Scenario:
 ${conversationScenario.trim() || "None"}
 
@@ -1022,10 +1543,20 @@ ${latestUserMessage.content}
 Conversation context:
 ${contextText}
 `.trim(),
-            },
-          ],
+          },
+        ];
+        const result = await requestCoachResponse({
+          apiKey: effectiveSettings.openRouterApiKey,
+          model: effectiveSettings.coachModel,
+          messages: coachMessages,
+          latestUserMessage,
+          routingSessionId: sessionId,
+          signal: request.signal,
         });
-        const result = normalizeCoachResponse(raw, latestUserMessage.id);
+
+        if (!isCurrentRequest(requestKey, request.id)) {
+          return;
+        }
         const coachFeedback: CoachFeedback = {
           ...result,
           id: makeId(),
@@ -1042,11 +1573,16 @@ ${contextText}
           ),
         );
       } catch (error) {
-        setCoachError(
-          error instanceof Error ? error.message : "Silent Coach request failed.",
-        );
+        if (!isAbortError(error) && isCurrentRequest(requestKey, request.id)) {
+          setCoachErrorForSession(
+            sessionId,
+            error instanceof Error
+              ? error.message
+              : "Silent Coach request failed.",
+          );
+        }
       } finally {
-        setCoachPending(false);
+        finishRequest(requestKey, request.id);
       }
     },
     [
@@ -1055,24 +1591,28 @@ ${contextText}
       effectiveSettings.explanationLanguage,
       effectiveSettings.openRouterApiKey,
       effectiveSettings.recentTurns,
+      finishRequest,
+      isCurrentRequest,
       setSessions,
+      setCoachErrorForSession,
+      startRequest,
     ],
   );
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback((draft: string) => {
     const content = draft.trim();
 
-    if (!content || chatPending) {
-      return;
+    if (!content || chatPending || coachPending) {
+      return false;
     }
 
     if (!effectiveSettings.openRouterApiKey.trim()) {
       const message = "Add your OpenRouter API key in Settings before sending.";
 
-      setChatError(message);
-      setCoachError(message);
+      setChatErrorForSession(activeErrorKey, message);
+      setCoachErrorForSession(activeErrorKey, message);
       setSettingsOpen(true);
-      return;
+      return false;
     }
 
     const userMessage: ChatMessage = {
@@ -1084,9 +1624,8 @@ ${contextText}
     const sessionId = activeSessionId ?? makeId();
     const conversation = [...messages, userMessage];
 
-    setDraft("");
-    setChatError(null);
-    setCoachError(null);
+    setChatErrorForSession(sessionId, null);
+    setCoachErrorForSession(sessionId, null);
 
     if (activeSessionId) {
       updateSession(sessionId, { messages: conversation });
@@ -1106,10 +1645,12 @@ ${contextText}
       scenario,
       speechEnabled,
     );
+    return true;
   }, [
     activeSessionId,
+    activeErrorKey,
     chatPending,
-    draft,
+    coachPending,
     effectiveSettings.openRouterApiKey,
     messages,
     runChatPartner,
@@ -1117,8 +1658,9 @@ ${contextText}
     scenario,
     speechEnabled,
     setCurrentSessionId,
-    setDraft,
     setSessions,
+    setChatErrorForSession,
+    setCoachErrorForSession,
     updateSession,
   ]);
 
@@ -1133,8 +1675,8 @@ ${contextText}
       if (!effectiveSettings.openRouterApiKey.trim()) {
         const message = "Add your OpenRouter API key in Settings before editing.";
 
-        setChatError(message);
-        setCoachError(message);
+        setChatErrorForSession(activeSession.id, message);
+        setCoachErrorForSession(activeSession.id, message);
         setSettingsOpen(true);
         return false;
       }
@@ -1171,31 +1713,12 @@ ${contextText}
         (item) => !rerunUserMessageIds.has(item.messageId),
       );
 
-      if (playingMessageId && removedAssistantIds.has(playingMessageId)) {
-        audioPlayerRef.current?.pause();
-        setPlayingMessageId(null);
-      }
+      removeAudioForMessageIds(removedAssistantIds);
 
-      setSpeechPendingIds((current) =>
-        current.filter((messageId) => !removedAssistantIds.has(messageId)),
-      );
-      removedMessages
-        .filter((message) => message.role === "assistant")
-        .forEach((message) => {
-          void deleteCachedAudioBlob(
-            getAssistantAudioCacheKey({
-              messageId: message.id,
-              model: effectiveSettings.ttsModel,
-              voice: getValidTtsVoice(
-                activeSession.ttsVoice,
-                effectiveSettings.ttsVoice,
-              ),
-            }),
-          );
-        });
-
-      setChatError(null);
-      setCoachError(null);
+      abortRequest(getRequestKey("chat", activeSession.id));
+      abortRequest(getRequestKey("coach", activeSession.id));
+      setChatErrorForSession(activeSession.id, null);
+      setCoachErrorForSession(activeSession.id, null);
       setMessageEditRequest(null);
       updateSession(activeSession.id, {
         messages: conversation,
@@ -1219,16 +1742,17 @@ ${contextText}
     },
     [
       activeSession,
+      abortRequest,
       chatPending,
       coachPending,
       effectiveSettings.openRouterApiKey,
-      effectiveSettings.ttsModel,
-      effectiveSettings.ttsVoice,
-      playingMessageId,
+      removeAudioForMessageIds,
       runChatPartner,
       runSilentCoach,
       scenario,
       speechEnabled,
+      setChatErrorForSession,
+      setCoachErrorForSession,
       updateSession,
     ],
   );
@@ -1252,8 +1776,8 @@ ${contextText}
         return;
       }
 
-      setChatError(null);
-      setCoachError(null);
+      setChatErrorForSession(activeSession.id, null);
+      setCoachErrorForSession(activeSession.id, null);
       setMobileView("chat");
       setMessageEditRequest({
         messageId: message.id,
@@ -1262,7 +1786,13 @@ ${contextText}
         feedbackId: item.id,
       });
     },
-    [activeSession, chatPending, coachPending],
+    [
+      activeSession,
+      chatPending,
+      coachPending,
+      setChatErrorForSession,
+      setCoachErrorForSession,
+    ],
   );
 
   const handleEditRequestComplete = useCallback(
@@ -1285,7 +1815,7 @@ ${contextText}
       if (!effectiveSettings.openRouterApiKey.trim()) {
         const message = "Add your OpenRouter API key in Settings first.";
 
-        setCoachError(message);
+        setCoachErrorForSession(activeSession.id, message);
         setSettingsOpen(true);
         return false;
       }
@@ -1306,8 +1836,11 @@ ${contextText}
         return false;
       }
 
-      setCoachPending(true);
-      setCoachError(null);
+      const sessionId = activeSession.id;
+      const requestKey = getRequestKey("coach", sessionId);
+      const request = startRequest(requestKey);
+
+      setCoachErrorForSession(sessionId, null);
       setRebuttingFeedbackId(feedbackId);
 
       try {
@@ -1323,19 +1856,14 @@ ${contextText}
             return `${speaker}: ${message.content}`;
           })
           .join("\n\n");
-        const raw = await callOpenRouterFromBrowser({
-          apiKey: effectiveSettings.openRouterApiKey,
-          model: effectiveSettings.coachModel,
-          temperature: 0.2,
-          responseFormat: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content: buildCoachSystemPrompt(speechEnabled),
-            },
-            {
-              role: "user",
-              content: `
+        const coachMessages: BrowserOpenRouterMessage[] = [
+          {
+            role: "system",
+            content: buildCoachSystemPrompt(speechEnabled),
+          },
+          {
+            role: "user",
+            content: `
 The user is rebutting your previous feedback because it may have missed their intended meaning.
 Use the rebuttal to revise the advice. Do not defend the old feedback.
 If the user's original wording is already acceptable for their intended meaning, say so clearly and give a more natural option only if useful.
@@ -1371,10 +1899,20 @@ ${JSON.stringify(
 Conversation context:
 ${contextText}
 `.trim(),
-            },
-          ],
+          },
+        ];
+        const result = await requestCoachResponse({
+          apiKey: effectiveSettings.openRouterApiKey,
+          model: effectiveSettings.coachModel,
+          messages: coachMessages,
+          latestUserMessage,
+          routingSessionId: sessionId,
+          signal: request.signal,
         });
-        const result = normalizeCoachResponse(raw, latestUserMessage.id);
+
+        if (!isCurrentRequest(requestKey, request.id)) {
+          return false;
+        }
         const updatedFeedback: CoachFeedback = {
           ...result,
           id: feedbackItem.id,
@@ -1396,13 +1934,21 @@ ${contextText}
         );
         return true;
       } catch (error) {
-        setCoachError(
-          error instanceof Error ? error.message : "Silent Coach request failed.",
-        );
+        if (!isAbortError(error) && isCurrentRequest(requestKey, request.id)) {
+          setCoachErrorForSession(
+            sessionId,
+            error instanceof Error
+              ? error.message
+              : "Silent Coach request failed.",
+          );
+        }
         return false;
       } finally {
-        setCoachPending(false);
-        setRebuttingFeedbackId(null);
+        const wasCurrent = isCurrentRequest(requestKey, request.id);
+        finishRequest(requestKey, request.id);
+        if (wasCurrent) {
+          setRebuttingFeedbackId(null);
+        }
       }
     },
     [
@@ -1413,21 +1959,29 @@ ${contextText}
       effectiveSettings.explanationLanguage,
       effectiveSettings.openRouterApiKey,
       effectiveSettings.recentTurns,
+      finishRequest,
+      isCurrentRequest,
       scenario,
       setSessions,
+      setCoachErrorForSession,
       speechEnabled,
+      startRequest,
     ],
   );
 
   const handleSelectSession = useCallback(
     (sessionId: string) => {
+      if (currentSessionIdRef.current !== sessionId) {
+        stopAudioPlayback();
+        abortAllSpeechRequests();
+      }
+      currentSessionIdRef.current = sessionId;
       setCurrentSessionId(sessionId);
+      setSpeechError(null);
       setMessageEditRequest(null);
-      setChatError(null);
-      setCoachError(null);
       setMobileView("chat");
     },
-    [setCurrentSessionId],
+    [abortAllSpeechRequests, setCurrentSessionId, stopAudioPlayback],
   );
 
   const handleNewSession = useCallback(() => {
@@ -1437,9 +1991,9 @@ ${contextText}
       activeSession.feedback.length === 0
     ) {
       setCurrentSessionId(activeSession.id);
-      setDraft("");
-      setChatError(null);
-      setCoachError(null);
+      setChatErrorForSession(activeSession.id, null);
+      setCoachErrorForSession(activeSession.id, null);
+      setSpeechError(null);
       setMessageEditRequest(null);
       setMobileView("chat");
       return;
@@ -1447,59 +2001,123 @@ ${contextText}
 
     const session = createSession();
 
+    stopAudioPlayback();
+    abortAllSpeechRequests();
+    currentSessionIdRef.current = session.id;
     setSessions((current) => [session, ...current]);
     setCurrentSessionId(session.id);
-    setDraft("");
-    setChatError(null);
-    setCoachError(null);
+    setChatErrorForSession(session.id, null);
+    setCoachErrorForSession(session.id, null);
+    setSpeechError(null);
     setMessageEditRequest(null);
     setMobileView("chat");
   }, [
     activeSession,
+    abortAllSpeechRequests,
     setCurrentSessionId,
-    setDraft,
     setSessions,
+    setChatErrorForSession,
+    setCoachErrorForSession,
+    stopAudioPlayback,
   ]);
 
   const handleDeleteSession = useCallback(
     (sessionId: string) => {
-      const sessionToDelete = sessions.find((session) => session.id === sessionId);
+      const sessionIndex = sessions.findIndex(
+        (session) => session.id === sessionId,
+      );
+      const sessionToDelete = sessions[sessionIndex];
+
+      if (!sessionToDelete) {
+        return;
+      }
+
+      if (deletedSession) {
+        removeAudioForMessageIds(
+          deletedSession.session.messages
+            .filter((message) => message.role === "assistant")
+            .map((message) => message.id),
+        );
+      }
+
       const nextSessions = sessions.filter((session) => session.id !== sessionId);
+      const wasActive = sessionId === activeSessionId;
 
+      abortRequest(getRequestKey("chat", sessionId));
+      abortRequest(getRequestKey("coach", sessionId));
       setSessions(nextSessions);
-      sessionToDelete?.messages
-        .filter((message) => message.role === "assistant")
-        .forEach((message) => {
-          void deleteCachedAudioBlob(
-            getAssistantAudioCacheKey({
-              messageId: message.id,
-              model: effectiveSettings.ttsModel,
-              voice: getValidTtsVoice(
-                sessionToDelete.ttsVoice,
-                effectiveSettings.ttsVoice,
-              ),
-            }),
-          );
-        });
+      setDeletedSession({
+        session: sessionToDelete,
+        index: sessionIndex,
+        wasActive,
+      });
+      setStreamingMessages((current) => {
+        if (!current[sessionId]) {
+          return current;
+        }
 
-      if (sessionId === activeSessionId) {
-        setCurrentSessionId(nextSessions[0]?.id ?? null);
-        setDraft("");
-        setChatError(null);
-        setCoachError(null);
+        const next = { ...current };
+        delete next[sessionId];
+        return next;
+      });
+      setChatErrors((current) => updateSessionError(current, sessionId, null));
+      setCoachErrors((current) => updateSessionError(current, sessionId, null));
+
+      if (wasActive) {
+        const nextSessionId = nextSessions[0]?.id ?? null;
+        stopAudioPlayback();
+        abortAllSpeechRequests();
+        currentSessionIdRef.current = nextSessionId;
+        setCurrentSessionId(nextSessionId);
+        setSpeechError(null);
         setMessageEditRequest(null);
       }
     },
     [
       activeSessionId,
-      effectiveSettings.ttsModel,
-      effectiveSettings.ttsVoice,
+      abortAllSpeechRequests,
+      abortRequest,
+      deletedSession,
+      removeAudioForMessageIds,
       sessions,
       setCurrentSessionId,
-      setDraft,
       setSessions,
+      stopAudioPlayback,
     ],
   );
+
+  const handleUndoDelete = useCallback(() => {
+    if (!deletedSession) {
+      return;
+    }
+
+    const { session, index, wasActive } = deletedSession;
+    setSessions((current) => {
+      if (current.some((item) => item.id === session.id)) {
+        return current;
+      }
+
+      const next = [...current];
+      next.splice(Math.min(index, next.length), 0, session);
+      return next;
+    });
+
+    if (wasActive) {
+      stopAudioPlayback();
+      abortAllSpeechRequests();
+      currentSessionIdRef.current = session.id;
+      setCurrentSessionId(session.id);
+      setSpeechError(null);
+    }
+
+    setDeletedSession(null);
+  }, [
+    abortAllSpeechRequests,
+    deletedSession,
+    setCurrentSessionId,
+    setSessions,
+    stopAudioPlayback,
+  ]);
 
   const handleRenameSession = useCallback(
     (sessionId: string, title: string) => {
@@ -1584,6 +2202,18 @@ ${contextText}
     [activeSession, playAssistantMessageAudio],
   );
 
+  const handleSettingsChange = useCallback(
+    (nextSettings: CoachSettings) => {
+      setModelTestMessage(null);
+      setSettings(nextSettings);
+    },
+    [setSettings],
+  );
+
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+  }, []);
+
   const hasApiKey = Boolean(effectiveSettings.openRouterApiKey.trim());
   const mobileSubtitle =
     mobileView === "chat"
@@ -1597,7 +2227,7 @@ ${contextText}
       <header className="desktop-header mx-auto hidden w-full max-w-[1540px] items-center justify-between gap-4 pb-4 lg:flex">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="brand-mark shine-sweep flex size-11 shrink-0 items-center justify-center text-white transition-transform duration-300 hover:-translate-y-0.5">
+            <div className="brand-mark shine-sweep smooth-transition flex size-11 shrink-0 items-center justify-center text-white hover:-translate-y-0.5">
               <AudioLines className="size-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
@@ -1612,7 +2242,7 @@ ${contextText}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
-            className={`hidden h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5 sm:inline-flex ${
+            className={`smooth-transition hidden h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm hover:-translate-y-0.5 sm:inline-flex ${
               hasApiKey
                 ? "border-[#6558f5]/20 bg-[#eeecff] text-[#6558f5] shadow-stone-900/[0.03]"
                 : "border-[#9f7a31]/20 bg-[#f7efe0] text-[#7a5d22] shadow-stone-900/[0.03]"
@@ -1625,7 +2255,7 @@ ${contextText}
             {hasApiKey ? "Key saved" : "Add key"}
           </button>
           <button
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-900/10 bg-[#fffdf8]/80 px-3 text-sm font-semibold text-stone-800 shadow-sm shadow-stone-900/[0.04] backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#fffdf8] hover:shadow-md focus:outline-none focus:ring-4 focus:ring-stone-900/10"
+            className="smooth-transition inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-900/10 bg-[#fffdf8]/80 px-3 text-sm font-semibold text-stone-800 shadow-sm shadow-stone-900/[0.04] backdrop-blur hover:-translate-y-0.5 hover:bg-[#fffdf8] hover:shadow-md focus:outline-none focus:ring-4 focus:ring-stone-900/10"
             type="button"
             onClick={handleNewSession}
           >
@@ -1633,7 +2263,7 @@ ${contextText}
             <span className="hidden sm:inline">New Chat</span>
           </button>
           <button
-            className="shine-sweep inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#201d35] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#171529] hover:shadow-md focus:outline-none focus:ring-4 focus:ring-[#6558f5]/15"
+            className="shine-sweep smooth-transition inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#201d35] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 hover:-translate-y-0.5 hover:bg-[#171529] hover:shadow-md focus:outline-none focus:ring-4 focus:ring-[#6558f5]/15"
             type="button"
             onClick={() => setSettingsOpen(true)}
           >
@@ -1659,7 +2289,7 @@ ${contextText}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <button
-            className={`flex size-9 items-center justify-center rounded-lg border shadow-sm transition active:scale-95 ${
+            className={`smooth-transition flex size-9 items-center justify-center rounded-lg border shadow-sm active:scale-95 ${
               hasApiKey
                 ? "border-[#6558f5]/20 bg-[#eeecff] text-[#6558f5]"
                 : "border-[#9f7a31]/20 bg-[#f7efe0] text-[#7a5d22]"
@@ -1671,7 +2301,7 @@ ${contextText}
             <KeyRound className="size-4" aria-hidden="true" />
           </button>
           <button
-            className="flex size-9 items-center justify-center rounded-lg border border-stone-900/10 bg-[#fffdf8]/80 text-stone-700 shadow-sm transition active:scale-95"
+            className="smooth-transition flex size-9 items-center justify-center rounded-lg border border-stone-900/10 bg-[#fffdf8]/80 text-stone-700 shadow-sm active:scale-95"
             type="button"
             onClick={handleNewSession}
             title="New chat"
@@ -1679,7 +2309,7 @@ ${contextText}
             <Plus className="size-4" aria-hidden="true" />
           </button>
           <button
-            className="flex size-9 items-center justify-center rounded-lg bg-[#201d35] text-white shadow-sm shadow-stone-900/10 transition active:scale-95"
+            className="smooth-transition flex size-9 items-center justify-center rounded-lg bg-[#201d35] text-white shadow-sm shadow-stone-900/10 active:scale-95"
             type="button"
             onClick={() => setSettingsOpen(true)}
             title="Settings"
@@ -1689,50 +2319,52 @@ ${contextText}
         </div>
       </header>
 
-      <div className="app-shell animate-soft-rise mx-auto hidden min-h-0 w-full max-w-[1540px] flex-1 overflow-hidden backdrop-blur-2xl lg:grid lg:grid-cols-[clamp(276px,19vw,308px)_minmax(0,1fr)_minmax(350px,398px)]">
-        <HistoryPanel
-          sessions={sessions}
-          currentSessionId={activeSessionId}
-          onSelectSession={handleSelectSession}
-          onRenameSession={handleRenameSession}
-          onDeleteSession={handleDeleteSession}
-        />
-        <ChatPanel
-          messages={messages}
-          scenario={scenario}
-          scenarioPresets={effectiveScenarioPresets}
-          speechEnabled={speechEnabled}
-          conversationVoice={conversationVoice}
-          hideAssistantText={hideAssistantText}
-          speechPendingIds={speechPendingIds}
-          playingMessageId={playingMessageId}
-          value={draft}
-          error={chatError ?? speechError}
-          isPending={chatPending}
-          canEditMessages={!chatPending && !coachPending}
-          editRequest={messageEditRequest}
-          onScenarioChange={handleScenarioChange}
-          onScenarioPresetsChange={setScenarioPresets}
-          onSpeechEnabledChange={handleSpeechEnabledChange}
-          onHideAssistantTextChange={handleHideAssistantTextChange}
-          onPlayAssistantMessage={handlePlayAssistantMessage}
-          onEditUserMessage={handleEditUserMessage}
-          onEditRequestComplete={handleEditRequestComplete}
-          onValueChange={setDraft}
-          onSubmit={handleSend}
-        />
-        <CoachPanel
-          feedback={feedback}
-          error={coachError}
-          isPending={coachPending}
-          practiceFeedbackId={practiceFeedbackId}
-          rebuttingFeedbackId={rebuttingFeedbackId}
-          canPractice={!chatPending && !coachPending}
-          onPracticeFeedback={handlePracticeFeedback}
-          onRebutFeedback={handleRebutCoachFeedback}
-        />
-      </div>
-
+      {isDesktopLayout ? (
+        <div className="app-shell animate-soft-rise mx-auto grid min-h-0 w-full max-w-[1540px] flex-1 grid-cols-[clamp(276px,19vw,308px)_minmax(0,1fr)_minmax(350px,398px)] overflow-hidden backdrop-blur-2xl">
+          <HistoryPanel
+            sessions={sessions}
+            currentSessionId={activeSessionId}
+            onSelectSession={handleSelectSession}
+            onRenameSession={handleRenameSession}
+            onDeleteSession={handleDeleteSession}
+          />
+          <ChatPanel
+            sessionId={activeSessionId}
+            messages={messages}
+            streamingMessage={streamingMessage}
+            scenario={scenario}
+            scenarioPresets={effectiveScenarioPresets}
+            speechEnabled={speechEnabled}
+            conversationVoice={conversationVoice}
+            hideAssistantText={hideAssistantText}
+            speechPendingIds={speechPendingIds}
+            playingMessageId={playingMessageId}
+            error={chatError ?? speechError}
+            isPending={chatPending}
+            canSend={!chatPending && !coachPending}
+            canEditMessages={!chatPending && !coachPending}
+            editRequest={messageEditRequest}
+            onScenarioChange={handleScenarioChange}
+            onScenarioPresetsChange={setScenarioPresets}
+            onSpeechEnabledChange={handleSpeechEnabledChange}
+            onHideAssistantTextChange={handleHideAssistantTextChange}
+            onPlayAssistantMessage={handlePlayAssistantMessage}
+            onEditUserMessage={handleEditUserMessage}
+            onEditRequestComplete={handleEditRequestComplete}
+            onSubmit={handleSend}
+          />
+          <CoachPanel
+            feedback={feedback}
+            error={coachError}
+            isPending={coachPending}
+            practiceFeedbackId={practiceFeedbackId}
+            rebuttingFeedbackId={rebuttingFeedbackId}
+            canPractice={!chatPending && !coachPending}
+            onPracticeFeedback={handlePracticeFeedback}
+            onRebutFeedback={handleRebutCoachFeedback}
+          />
+        </div>
+      ) : (
       <div className="mobile-workspace flex min-h-0 flex-1 flex-col lg:hidden">
         <div className="min-h-0 flex-1 overflow-hidden">
           {mobileView === "history" ? (
@@ -1746,7 +2378,9 @@ ${contextText}
           ) : null}
           {mobileView === "chat" ? (
             <ChatPanel
+              sessionId={activeSessionId}
               messages={messages}
+              streamingMessage={streamingMessage}
               scenario={scenario}
               scenarioPresets={effectiveScenarioPresets}
               speechEnabled={speechEnabled}
@@ -1754,9 +2388,9 @@ ${contextText}
               hideAssistantText={hideAssistantText}
               speechPendingIds={speechPendingIds}
               playingMessageId={playingMessageId}
-              value={draft}
               error={chatError ?? speechError}
               isPending={chatPending}
+              canSend={!chatPending && !coachPending}
               canEditMessages={!chatPending && !coachPending}
               editRequest={messageEditRequest}
               onScenarioChange={handleScenarioChange}
@@ -1766,7 +2400,6 @@ ${contextText}
               onPlayAssistantMessage={handlePlayAssistantMessage}
               onEditUserMessage={handleEditUserMessage}
               onEditRequestComplete={handleEditRequestComplete}
-              onValueChange={setDraft}
               onSubmit={handleSend}
             />
           ) : null}
@@ -1807,21 +2440,64 @@ ${contextText}
           />
         </nav>
       </div>
+      )}
+
+      {storageWarning ? (
+        <div
+          className="animate-gentle-pop fixed left-1/2 top-3 z-[60] flex w-[min(92vw,560px)] -translate-x-1/2 items-center gap-3 rounded-2xl border border-amber-900/15 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-xl shadow-amber-950/10"
+          role="alert"
+        >
+          <span className="min-w-0 flex-1">
+            {storageWarning.operation === "read"
+              ? "Browser storage could not be read. Local settings or history may have been reset."
+              : "Browser storage is unavailable or full. Recent changes may not survive a reload."}
+          </span>
+          <button
+            className="smooth-transition shrink-0 rounded-lg px-2.5 py-1.5 font-bold text-amber-900 hover:bg-amber-900/10 focus:outline-none focus:ring-4 focus:ring-amber-900/10"
+            type="button"
+            onClick={() => setStorageWarning(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {deletedSession ? (
+        <div
+          className="animate-gentle-pop fixed bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] left-1/2 z-40 flex w-[min(92vw,430px)] -translate-x-1/2 items-center gap-3 rounded-2xl border border-stone-900/10 bg-[#201d35] px-4 py-3 text-sm text-white shadow-2xl shadow-stone-950/25 lg:bottom-6"
+          role="status"
+        >
+          <span className="min-w-0 flex-1 truncate">
+            Deleted “{deletedSession.session.title}”
+          </span>
+          <button
+            className="smooth-transition shrink-0 rounded-lg bg-white/12 px-3 py-1.5 font-bold text-[#d9d5ff] hover:bg-white/20 hover:text-white focus:outline-none focus:ring-4 focus:ring-white/15"
+            type="button"
+            onClick={handleUndoDelete}
+          >
+            Undo
+          </button>
+        </div>
+      ) : null}
 
       <SettingsPanel
         open={settingsOpen}
         settings={effectiveSettings}
         models={models}
+        speechModels={speechModels}
         modelsLoading={modelsLoading}
         modelsError={modelsError}
         modelsSource={modelsSource}
+        modelTestLoading={modelTestLoading}
+        modelTestMessage={modelTestMessage}
         creditSummary={creditSummary}
         creditLoading={creditLoading}
         creditError={creditError}
-        onChange={setSettings}
+        onChange={handleSettingsChange}
         onRefreshCredits={refreshCredits}
         onRefreshModels={refreshModels}
-        onClose={() => setSettingsOpen(false)}
+        onTestModels={testSelectedModels}
+        onClose={closeSettings}
       />
     </main>
   );
@@ -1845,7 +2521,7 @@ function MobileTabButton({
 
   return (
     <button
-      className={`mobile-tab relative flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-semibold transition active:scale-[0.98] ${
+      className={`mobile-tab smooth-transition relative flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-semibold active:scale-[0.98] ${
         active
           ? "bg-[#eeecff] text-[#6558f5] shadow-sm shadow-stone-900/[0.03]"
           : "text-stone-500 hover:bg-stone-100/70 hover:text-[#201d35]"

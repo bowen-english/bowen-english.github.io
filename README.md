@@ -9,6 +9,7 @@ A private static web app for English shadow practice: one AI chats naturally, wh
 - Tailwind CSS
 - OpenRouter chat completions API called directly from the browser
 - Browser `localStorage` for API key, messages, feedback, and settings
+- Browser IndexedDB for bounded speech-audio caching
 
 ## Setup
 
@@ -25,9 +26,22 @@ The default models are:
 - Silent Coach: `openai/gpt-5.6-luna`
 - TTS: `google/gemini-3.1-flash-tts-preview`
 
-The model fields are editable in the UI and saved locally.
+Chat and coaching intentionally share Luna as the fast, cost-efficient default.
+TTS stays on a dedicated speech model because Luna produces text, not audio.
+All built-in GPT-5.6 requests use `reasoning.effort: medium`. Chat Partner
+responses stream into the conversation as they arrive; final messages are saved
+only after the stream completes.
 
-The app can load OpenRouter models automatically. When an API key is saved it first tries the account-scoped model list; otherwise it falls back to OpenRouter's public model list. You can still type a model ID manually in either model field.
+The model fields are editable and saved locally. Opening Settings lazily loads
+OpenRouter's current all-modality catalog once, separates text from dedicated
+speech models, and caches the result for six hours in `sessionStorage`. With an
+API key it first tries the account-scoped list, then falls back to the public
+catalog. “Test selected models” performs a real streaming Chat, structured
+Coach, and TTS smoke test.
+
+Requests have cancellation, timeouts, bounded retries, completion limits, and
+per-conversation request isolation. Structured Coach output is schema-validated
+and gets one automatic repair attempt if necessary.
 
 ## Static Deploy
 
@@ -53,6 +67,23 @@ This repository includes a GitHub Pages workflow at `.github/workflows/nextjs.ym
 
 Conversations are saved as local browser sessions. You can start a new conversation, switch between saved conversations, or delete individual conversations from the history bar. Settings, draft text, and the OpenRouter API key are also kept in `localStorage`.
 
+Drafts are stored per conversation and written with a short debounce. Deleted
+conversations can be restored from the seven-second Undo notice. Generated
+speech is cached in IndexedDB with a 75 MB / 200-entry least-recently-used cap;
+in-memory object URLs are capped separately.
+
+If browser storage is unavailable or full, the app shows a visible warning
+instead of silently losing changes.
+
+## Validation
+
+```bash
+npm test
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
 ## Context Modes
 
 - `latest_user`: Silent Coach only sees the user's latest sentence.
@@ -65,4 +96,7 @@ The explanation language setting controls whether Silent Coach explains feedback
 
 - [app/page.tsx](app/page.tsx): main client UI and localStorage orchestration.
 - [lib/openrouter-browser.ts](lib/openrouter-browser.ts): browser-side OpenRouter request wrapper.
+- [lib/structured-responses.ts](lib/structured-responses.ts): validated Coach and voice response parsing.
+- [lib/audio-cache.ts](lib/audio-cache.ts): bounded IndexedDB audio cache.
+- [hooks/use-request-registry.ts](hooks/use-request-registry.ts): request cancellation and stale-response protection.
 - [lib/prompts.ts](lib/prompts.ts): Chat Partner and Silent Coach system prompts.

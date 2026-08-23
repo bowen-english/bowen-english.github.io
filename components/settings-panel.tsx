@@ -12,10 +12,16 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import { useState } from "react";
-import type { OpenRouterCreditSummary } from "@/lib/openrouter-browser";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+  isGeminiTtsModel,
+  type OpenRouterCreditSummary,
+} from "@/lib/openrouter-browser";
 import {
   COACH_CONTEXT_OPTIONS,
+  DEFAULT_CHAT_MODEL,
+  DEFAULT_COACH_MODEL,
+  DEFAULT_TTS_MODEL,
   TTS_VOICE_OPTIONS,
   type CoachContextMode,
   type CoachExplanationLanguage,
@@ -27,15 +33,22 @@ type SettingsPanelProps = {
   open: boolean;
   settings: CoachSettings;
   models: OpenRouterModel[];
+  speechModels: OpenRouterModel[];
   modelsLoading: boolean;
   modelsError: string | null;
   modelsSource: "user" | "public" | null;
+  modelTestLoading: boolean;
+  modelTestMessage: {
+    status: "success" | "error";
+    message: string;
+  } | null;
   creditSummary: OpenRouterCreditSummary | null;
   creditLoading: boolean;
   creditError: string | null;
   onChange: (settings: CoachSettings) => void;
   onRefreshCredits: () => void;
   onRefreshModels: () => void;
+  onTestModels: () => void;
   onClose: () => void;
 };
 
@@ -43,26 +56,129 @@ export function SettingsPanel({
   open,
   settings,
   models,
+  speechModels,
   modelsLoading,
   modelsError,
   modelsSource,
+  modelTestLoading,
+  modelTestMessage,
   creditSummary,
   creditLoading,
   creditError,
   onChange,
   onRefreshCredits,
   onRefreshModels,
+  onTestModels,
   onClose,
 }: SettingsPanelProps) {
   const [showApiKey, setShowApiKey] = useState(false);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const hasKey = Boolean(settings.openRouterApiKey.trim());
+  const selectedSpeechModel = speechModels.find(
+    (model) => model.id === settings.ttsModel.trim(),
+  );
+  const usesGeminiVoices = isGeminiTtsModel(settings.ttsModel);
+  const voiceChoices = usesGeminiVoices
+    ? TTS_VOICE_OPTIONS
+    : (selectedSpeechModel?.supportedVoices ?? []).map((value) => {
+        return (
+          TTS_VOICE_OPTIONS.find(
+            (voice) => voice.value.toLowerCase() === value.toLowerCase(),
+          ) ?? {
+            value,
+            label: value,
+            tone: "model voice",
+            profile: "A voice supported by the selected TTS model.",
+            bestFor: "Provider-specific speech synthesis.",
+          }
+        );
+      });
   const selectedVoice =
-    TTS_VOICE_OPTIONS.find((voice) => voice.value === settings.ttsVoice) ??
-    TTS_VOICE_OPTIONS[0];
+    voiceChoices.find(
+      (voice) =>
+        voice.value.toLowerCase() === settings.ttsVoice.trim().toLowerCase(),
+    ) ?? voiceChoices[0];
 
   const update = (patch: Partial<CoachSettings>) => {
     onChange({ ...settings, ...patch });
   };
+
+  const updateTtsModel = (value: string) => {
+    const nextModel = speechModels.find((model) => model.id === value.trim());
+    const supportedVoices = nextModel?.supportedVoices ?? [];
+    const currentVoiceIsSupported = supportedVoices.some(
+      (voice) =>
+        voice.toLowerCase() === settings.ttsVoice.trim().toLowerCase(),
+    );
+
+    update({
+      ttsModel: value,
+      ...(supportedVoices.length > 0 && !currentVoiceIsSupported
+        ? { ttsVoice: supportedVoices[0] }
+        : {}),
+    });
+  };
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const previousBodyOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    const frame = window.requestAnimationFrame(() => {
+      closeButtonRef.current?.focus();
+    });
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const dialog = dialogRef.current;
+      const focusable = dialog
+        ? Array.from(
+            dialog.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+            ),
+          )
+        : [];
+
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+      previouslyFocused?.focus();
+    };
+  }, [onClose, open]);
 
   if (!open) {
     return null;
@@ -71,11 +187,20 @@ export function SettingsPanel({
   return (
     <div
       className="settings-backdrop fixed inset-0 z-50 flex items-end justify-center px-0 py-0 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-title"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
     >
-      <section className="settings-sheet animate-soft-rise flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] sm:max-h-full sm:rounded-[28px]">
+      <section
+        ref={dialogRef}
+        className="settings-sheet animate-soft-rise flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] sm:max-h-full sm:rounded-[28px]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        tabIndex={-1}
+      >
         <header className="settings-header flex items-center justify-between px-5 py-4 backdrop-blur">
           <div className="flex min-w-0 items-center gap-3">
             <div className="shine-sweep flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#201d35] text-white shadow-sm shadow-stone-900/10">
@@ -94,10 +219,12 @@ export function SettingsPanel({
             </div>
           </div>
           <button
-            className="flex size-10 items-center justify-center rounded-lg text-stone-500 transition-all duration-200 hover:-translate-y-0.5 hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-4 focus:ring-stone-900/10"
+            ref={closeButtonRef}
+            className="smooth-transition flex size-10 items-center justify-center rounded-lg text-stone-500 hover:-translate-y-0.5 hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-4 focus:ring-stone-900/10"
             type="button"
             onClick={onClose}
             title="Close settings"
+            aria-label="Close settings"
           >
             <X className="size-5" aria-hidden="true" />
           </button>
@@ -131,11 +258,15 @@ export function SettingsPanel({
                 </span>
               </div>
 
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+              <label
+                className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500"
+                htmlFor="openrouter-api-key"
+              >
                 API Key
               </label>
-              <div className="flex h-11 rounded-lg border border-stone-900/10 bg-[#fffdf8] transition-all duration-200 focus-within:border-[#6558f5]/45 focus-within:shadow-md focus-within:shadow-[#6558f5]/10 focus-within:ring-4 focus-within:ring-[#6558f5]/10">
+              <div className="smooth-transition flex h-11 rounded-lg border border-stone-900/10 bg-[#fffdf8] focus-within:border-[#6558f5]/45 focus-within:shadow-md focus-within:shadow-[#6558f5]/10 focus-within:ring-4 focus-within:ring-[#6558f5]/10">
                 <input
+                  id="openrouter-api-key"
                   className="min-w-0 flex-1 bg-transparent px-3 text-sm text-stone-900 outline-none placeholder:text-stone-400"
                   value={settings.openRouterApiKey}
                   type={showApiKey ? "text" : "password"}
@@ -147,10 +278,11 @@ export function SettingsPanel({
                   placeholder="sk-or-v1-..."
                 />
                 <button
-                  className="flex size-11 shrink-0 items-center justify-center rounded-r-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
+                  className="smooth-transition flex size-11 shrink-0 items-center justify-center rounded-r-lg text-stone-500 hover:bg-stone-100 hover:text-stone-900"
                   type="button"
                   onClick={() => setShowApiKey((current) => !current)}
                   title={showApiKey ? "Hide API key" : "Show API key"}
+                  aria-label={showApiKey ? "Hide API key" : "Show API key"}
                 >
                   {showApiKey ? (
                     <EyeOff className="size-4" aria-hidden="true" />
@@ -170,12 +302,44 @@ export function SettingsPanel({
             </section>
 
             <section className="settings-card grid gap-4 rounded-2xl p-4 sm:grid-cols-2">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#6558f5]/12 bg-[#eeecff]/65 p-3 sm:col-span-2">
+                <div>
+                  <p className="text-sm font-bold text-[#201d35]">
+                    Recommended text pair
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-stone-600">
+                    {DEFAULT_CHAT_MODEL} · fast, capable, and cost-efficient
+                  </p>
+                </div>
+                <button
+                  className="smooth-transition inline-flex h-9 items-center gap-2 rounded-lg bg-[#6558f5] px-3 text-xs font-bold text-white shadow-sm shadow-[#6558f5]/15 hover:-translate-y-0.5 hover:bg-[#5145d9] disabled:cursor-default disabled:opacity-70 disabled:hover:translate-y-0"
+                  type="button"
+                  disabled={
+                    settings.chatModel === DEFAULT_CHAT_MODEL &&
+                    settings.coachModel === DEFAULT_COACH_MODEL
+                  }
+                  onClick={() =>
+                    update({
+                      chatModel: DEFAULT_CHAT_MODEL,
+                      coachModel: DEFAULT_COACH_MODEL,
+                    })
+                  }
+                >
+                  <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                  {settings.chatModel === DEFAULT_CHAT_MODEL &&
+                  settings.coachModel === DEFAULT_COACH_MODEL
+                    ? "Luna active"
+                    : "Use Luna for both"}
+                </button>
+              </div>
+
               <ModelField
                 label="Chat Model"
                 value={settings.chatModel}
                 models={models}
-                listId="chat-model-options"
-                placeholder="openai/gpt-5.6-luna"
+                loading={modelsLoading}
+                listId="text-model-options"
+                placeholder={DEFAULT_CHAT_MODEL}
                 onChange={(value) => update({ chatModel: value })}
               />
 
@@ -183,95 +347,163 @@ export function SettingsPanel({
                 label="Coach Model"
                 value={settings.coachModel}
                 models={models}
-                listId="coach-model-options"
-                placeholder="openai/gpt-5.6-luna"
+                loading={modelsLoading}
+                listId="text-model-options"
+                placeholder={DEFAULT_COACH_MODEL}
                 onChange={(value) => update({ coachModel: value })}
               />
 
               <div className="sm:col-span-2">
-                <button
-                  className="shine-sweep inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-900/10 bg-[#201d35] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#171529] focus:outline-none focus:ring-4 focus:ring-[#6558f5]/15 disabled:cursor-not-allowed disabled:opacity-45"
-                  type="button"
-                  onClick={onRefreshModels}
-                  disabled={modelsLoading}
-                >
-                  {modelsLoading ? (
-                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <RefreshCw className="size-4" aria-hidden="true" />
-                  )}
-                  Refresh models
-                </button>
-                <span className="ml-3 text-sm text-stone-500">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    className="shine-sweep smooth-transition inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-900/10 bg-[#201d35] px-3 text-sm font-semibold text-white shadow-sm shadow-stone-900/10 hover:-translate-y-0.5 hover:bg-[#171529] focus:outline-none focus:ring-4 focus:ring-[#6558f5]/15 disabled:cursor-not-allowed disabled:opacity-45"
+                    type="button"
+                    onClick={onRefreshModels}
+                    disabled={modelsLoading}
+                  >
+                    {modelsLoading ? (
+                      <Loader2
+                        className="size-4 animate-spin"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <RefreshCw className="size-4" aria-hidden="true" />
+                    )}
+                    Refresh catalog
+                  </button>
+                  <button
+                    className="smooth-transition inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#6558f5]/20 bg-[#eeecff] px-3 text-sm font-semibold text-[#6558f5] shadow-sm hover:-translate-y-0.5 hover:bg-[#e4e1ff] focus:outline-none focus:ring-4 focus:ring-[#6558f5]/15 disabled:cursor-not-allowed disabled:opacity-45"
+                    type="button"
+                    onClick={onTestModels}
+                    disabled={!hasKey || modelTestLoading}
+                  >
+                    {modelTestLoading ? (
+                      <Loader2
+                        className="size-4 animate-spin"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <CheckCircle2 className="size-4" aria-hidden="true" />
+                    )}
+                    Test selected models
+                  </button>
+                </div>
+                <p className="mt-2 text-sm text-stone-500">
                   {modelsLoading
                     ? "Loading OpenRouter models..."
-                    : `${models.length} models · ${modelsSource === "user" ? "account list" : "public list"}`}
-                </span>
+                    : modelsSource
+                      ? `${models.length} text · ${speechModels.length} speech · ${modelsSource === "user" ? "account list" : "public list"}`
+                      : "Catalog loads when Settings opens."}
+                </p>
                 {modelsError ? (
                   <p className="mt-2 text-sm text-rose-700">{modelsError}</p>
                 ) : null}
+                {modelTestMessage ? (
+                  <p
+                    className={`mt-2 text-sm ${
+                      modelTestMessage.status === "success"
+                        ? "text-emerald-700"
+                        : "text-rose-700"
+                    }`}
+                    role="status"
+                  >
+                    {modelTestMessage.message}
+                  </p>
+                ) : null}
               </div>
+              <ModelOptions id="text-model-options" models={models} />
             </section>
 
             <section className="settings-card grid gap-4 rounded-2xl p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
-              <div className="min-w-0">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
-                  TTS Model
-                </label>
-                <input
-                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
-                  value={settings.ttsModel}
-                  onChange={(event) => update({ ttsModel: event.target.value })}
-                  placeholder="google/gemini-3.1-flash-tts-preview"
-                />
-              </div>
+              <ModelField
+                label="TTS Model"
+                value={settings.ttsModel}
+                models={speechModels}
+                loading={modelsLoading}
+                listId="tts-model-options"
+                placeholder={DEFAULT_TTS_MODEL}
+                onChange={updateTtsModel}
+              />
+              <ModelOptions id="tts-model-options" models={speechModels} />
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
-                  Fallback Voice
-                </label>
-                <select
-                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
-                  value={settings.ttsVoice}
-                  onChange={(event) => update({ ttsVoice: event.target.value })}
+                <label
+                  className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500"
+                  htmlFor="fallback-voice"
                 >
-                  {TTS_VOICE_OPTIONS.map((voice) => (
-                    <option key={voice.value} value={voice.value}>
-                      {voice.label} · {voice.tone} · {voice.bestFor}
-                    </option>
-                  ))}
-                </select>
+                  Voice
+                </label>
+                {voiceChoices.length > 0 ? (
+                  <select
+                    id="fallback-voice"
+                    className="smooth-transition h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
+                    value={selectedVoice?.value ?? voiceChoices[0].value}
+                    onChange={(event) =>
+                      update({ ttsVoice: event.target.value })
+                    }
+                  >
+                    {voiceChoices.map((voice) => (
+                      <option key={voice.value} value={voice.value}>
+                        {voice.label} · {voice.tone} · {voice.bestFor}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="fallback-voice"
+                    className="smooth-transition h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none placeholder:text-stone-400 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
+                    value={settings.ttsVoice}
+                    onChange={(event) =>
+                      update({ ttsVoice: event.target.value })
+                    }
+                    placeholder="Provider-supported voice name"
+                  />
+                )}
               </div>
               <div className="rounded-lg border border-stone-900/10 bg-stone-50/80 p-3 sm:col-span-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-bold text-[#201d35]">
-                    {selectedVoice.label}
-                  </span>
-                  <span className="rounded-full border border-[#6558f5]/15 bg-[#eeecff] px-2 py-0.5 text-xs font-bold text-[#6558f5]">
-                    {selectedVoice.tone}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm leading-5 text-stone-600">
-                  {selectedVoice.profile}
-                </p>
-                <p className="mt-1 text-sm leading-5 text-stone-500">
-                  Best for: {selectedVoice.bestFor}
-                </p>
+                {selectedVoice ? (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-[#201d35]">
+                        {selectedVoice.label}
+                      </span>
+                      <span className="rounded-full border border-[#6558f5]/15 bg-[#eeecff] px-2 py-0.5 text-xs font-bold text-[#6558f5]">
+                        {selectedVoice.tone}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-5 text-stone-600">
+                      {selectedVoice.profile}
+                    </p>
+                    <p className="mt-1 text-sm leading-5 text-stone-500">
+                      Best for: {selectedVoice.bestFor}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm leading-5 text-stone-600">
+                    This model does not publish a voice list in the loaded
+                    catalog. Enter a provider-supported voice name, then run the
+                    model test.
+                  </p>
+                )}
                 <p className="mt-2 border-t border-stone-900/8 pt-2 text-xs leading-5 text-[#6558f5]">
-                  Gemini automatically casts one voice per conversation on its
-                  first playback. This voice is used only if casting is
-                  unavailable.
+                  {usesGeminiVoices
+                    ? "Gemini automatically casts one voice per conversation on first playback; this selection is the fallback."
+                    : "The selected voice is sent directly to this TTS model."}
                 </p>
               </div>
             </section>
 
             <section className="settings-card grid gap-4 rounded-2xl p-4 sm:grid-cols-[minmax(0,1fr)_150px_110px]">
               <div className="min-w-0">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                <label
+                  className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500"
+                  htmlFor="coach-context"
+                >
                   Coach Context
                 </label>
                 <select
-                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
+                  id="coach-context"
+                  className="smooth-transition h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
                   value={settings.contextMode}
                   onChange={(event) =>
                     update({
@@ -288,11 +520,15 @@ export function SettingsPanel({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                <label
+                  className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500"
+                  htmlFor="coach-explanation-language"
+                >
                   Explanation
                 </label>
                 <select
-                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
+                  id="coach-explanation-language"
+                  className="smooth-transition h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
                   value={settings.explanationLanguage}
                   onChange={(event) =>
                     update({
@@ -307,11 +543,15 @@ export function SettingsPanel({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                <label
+                  className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500"
+                  htmlFor="coach-recent-turns"
+                >
                   Turns
                 </label>
                 <input
-                  className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10 disabled:cursor-not-allowed disabled:opacity-45"
+                  id="coach-recent-turns"
+                  className="smooth-transition h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10 disabled:cursor-not-allowed disabled:opacity-45"
                   type="number"
                   min={1}
                   max={12}
@@ -383,11 +623,12 @@ function CreditSummaryCard({
               </p>
             </div>
             <button
-              className="flex size-9 shrink-0 items-center justify-center border border-[#6558f5]/12 bg-white text-[#6558f5] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45"
+              className="smooth-transition flex size-9 shrink-0 items-center justify-center border border-[#6558f5]/12 bg-white text-[#6558f5] shadow-sm hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45"
               type="button"
               onClick={onRefresh}
               disabled={!hasKey || loading}
               title="Refresh balance"
+              aria-label="Refresh OpenRouter balance"
             >
               <RefreshCw
                 className={`size-4 ${loading ? "animate-spin" : ""}`}
@@ -432,7 +673,7 @@ function CreditSummaryCard({
           ) : null}
 
           <a
-            className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-[#6558f5] transition hover:text-[#5145d9]"
+            className="smooth-transition mt-2 inline-flex items-center gap-1 text-xs font-bold text-[#6558f5] hover:text-[#5145d9]"
             href="https://openrouter.ai/settings/credits"
             target="_blank"
             rel="noreferrer"
@@ -459,6 +700,7 @@ function ModelField({
   label,
   value,
   models,
+  loading,
   listId,
   placeholder,
   onChange,
@@ -466,30 +708,71 @@ function ModelField({
   label: string;
   value: string;
   models: OpenRouterModel[];
+  loading: boolean;
   listId: string;
   placeholder: string;
   onChange: (value: string) => void;
 }) {
+  const inputId = useId();
+  const normalizedValue = value.trim();
+  const isAvailable = models.some((model) => model.id === normalizedValue);
+  const statusId = `${inputId}-status`;
+  const status = loading
+    ? "Checking the current OpenRouter catalog..."
+    : isAvailable
+      ? "Available in the current OpenRouter catalog."
+      : models.length > 0
+        ? "Not found in the loaded catalog; this ID may fail at request time."
+        : "Catalog unavailable; the ID will be sent as entered.";
+
   return (
     <div className="min-w-0">
-      <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+      <label
+        className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500"
+        htmlFor={inputId}
+      >
         {label}
       </label>
       <input
-        className="h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none transition-all duration-200 focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
+        id={inputId}
+        className="smooth-transition h-11 w-full rounded-lg border border-stone-900/10 bg-[#fffdf8] px-3 text-sm text-stone-900 outline-none focus:border-[#6558f5]/45 focus:shadow-md focus:shadow-[#6558f5]/10 focus:ring-4 focus:ring-[#6558f5]/10"
         value={value}
         list={listId}
+        aria-describedby={statusId}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
       />
-      <datalist id={listId}>
-        {models.map((model) => (
-          <option key={model.id} value={model.id}>
-            {formatModelLabel(model)}
-          </option>
-        ))}
-      </datalist>
+      <p
+        id={statusId}
+        className={`mt-1.5 text-xs leading-5 ${
+          isAvailable
+            ? "text-[#4f46cf]"
+            : loading
+              ? "text-stone-500"
+              : "text-amber-700"
+        }`}
+      >
+        {status}
+      </p>
     </div>
+  );
+}
+
+function ModelOptions({
+  id,
+  models,
+}: {
+  id: string;
+  models: OpenRouterModel[];
+}) {
+  return (
+    <datalist id={id}>
+      {models.map((model) => (
+        <option key={model.id} value={model.id}>
+          {formatModelLabel(model)}
+        </option>
+      ))}
+    </datalist>
   );
 }
 

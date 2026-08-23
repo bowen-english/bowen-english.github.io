@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, MessageSquareText, Pencil, Trash2, X } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, memo, useState } from "react";
 import type { ConversationSession } from "@/lib/types";
 
 type HistoryPanelProps = {
@@ -12,7 +12,7 @@ type HistoryPanelProps = {
   onDeleteSession: (sessionId: string) => void;
 };
 
-export function HistoryPanel({
+export const HistoryPanel = memo(function HistoryPanel({
   sessions,
   currentSessionId,
   onSelectSession,
@@ -69,7 +69,7 @@ export function HistoryPanel({
               return (
                 <article
                   key={session.id}
-                  className={`history-card ${isActive ? "history-card-active" : ""} group animate-soft-rise relative min-h-[86px] overflow-hidden rounded-2xl border px-4 py-3.5 transition-all duration-200 ${
+                  className={`history-card smooth-transition ${isActive ? "history-card-active" : ""} group animate-soft-rise relative min-h-[86px] overflow-hidden rounded-2xl border px-4 py-3.5 ${
                     isActive
                       ? "border-[#6558f5]/20 bg-[#f1f8f5] text-[#201d35] shadow-sm shadow-stone-900/[0.04] before:absolute before:inset-y-4 before:left-0 before:w-0.5 before:rounded-r-full before:bg-[#6558f5]"
                       : "border-stone-900/10 bg-[#fffdf8]/80 text-stone-800 shadow-sm shadow-stone-900/[0.04] hover:-translate-y-0.5 hover:border-[#6558f5]/20 hover:bg-[#fffdf8] hover:shadow-md"
@@ -81,20 +81,20 @@ export function HistoryPanel({
                       onSubmit={(event) => submitRename(event, session)}
                     >
                       <input
-                        className="h-9 min-w-0 flex-1 rounded-lg border border-stone-900/10 bg-[#fffdf8] px-2 text-sm font-semibold text-[#201d35] outline-none transition focus:border-[#6558f5]/45 focus:ring-4 focus:ring-[#6558f5]/10"
+                        className="smooth-transition h-9 min-w-0 flex-1 rounded-lg border border-stone-900/10 bg-[#fffdf8] px-2 text-sm font-semibold text-[#201d35] outline-none focus:border-[#6558f5]/45 focus:ring-4 focus:ring-[#6558f5]/10"
                         value={draftTitle}
                         autoFocus
                         onChange={(event) => setDraftTitle(event.target.value)}
                       />
                       <button
-                        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#6558f5] text-white shadow-sm shadow-[#6558f5]/15 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5145d9]"
+                        className="smooth-transition flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#6558f5] text-white shadow-sm shadow-[#6558f5]/15 hover:-translate-y-0.5 hover:bg-[#5145d9]"
                         type="submit"
                         title="Save name"
                       >
                         <Check className="size-4" aria-hidden="true" />
                       </button>
                       <button
-                        className="flex size-9 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-all duration-200 hover:-translate-y-0.5 hover:bg-stone-100 hover:text-stone-950"
+                        className="smooth-transition flex size-9 shrink-0 items-center justify-center rounded-lg text-stone-500 hover:-translate-y-0.5 hover:bg-stone-100 hover:text-stone-950"
                         type="button"
                         onClick={cancelEditing}
                         title="Cancel rename"
@@ -122,9 +122,9 @@ export function HistoryPanel({
                           {session.feedback.length} notes
                         </span>
                       </button>
-                      <div className="absolute right-0 top-0 flex translate-y-0 gap-1 opacity-100 transition-all duration-200 lg:translate-y-0.5 lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:translate-y-0 lg:group-hover:opacity-100">
+                      <div className="smooth-transition absolute right-0 top-0 flex translate-y-0 gap-1 opacity-100 lg:translate-y-0.5 lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:translate-y-0 lg:group-hover:opacity-100">
                         <button
-                          className={`flex size-8 shrink-0 items-center justify-center rounded-lg transition ${
+                          className={`smooth-transition flex size-8 shrink-0 items-center justify-center rounded-lg ${
                             isActive
                               ? "text-stone-500 hover:bg-white/65 hover:text-[#201d35]"
                               : "text-stone-400 hover:bg-stone-100 hover:text-stone-900"
@@ -136,7 +136,7 @@ export function HistoryPanel({
                           <Pencil className="size-3.5" aria-hidden="true" />
                         </button>
                         <button
-                          className={`flex size-8 shrink-0 items-center justify-center rounded-lg transition ${
+                          className={`smooth-transition flex size-8 shrink-0 items-center justify-center rounded-lg ${
                             isActive
                               ? "text-stone-500 hover:bg-white/65 hover:text-[#201d35]"
                               : "text-stone-400 hover:bg-rose-50 hover:text-rose-700"
@@ -158,4 +158,4 @@ export function HistoryPanel({
       </div>
     </aside>
   );
-}
+});

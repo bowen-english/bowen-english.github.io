@@ -35,6 +35,7 @@ export type OpenRouterModel = {
   completionPrice: string | null;
   inputModalities: string[];
   outputModalities: string[];
+  supportedVoices: string[];
   supportsJson: boolean;
 };
 
